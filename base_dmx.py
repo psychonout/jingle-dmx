@@ -34,15 +34,3 @@ class BaseDMX:
             logger.debug(e)
             pass
 
-
-with BaseDMX() as dmx:
-    dmx._send(1, 255)
-    dmx._send(2, 128)
-    dmx._send(3, 0)
-    dmx._send(4, 64)
-    dmx._send(5, 192)
-    dmx._send(6, 255)
-    dmx._send(7, 0)
-    dmx._send(8, 128)
-    dmx._send(9, 64)
-    dmx._send(10, 192)
