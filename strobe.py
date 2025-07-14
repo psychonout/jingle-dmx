@@ -7,6 +7,14 @@ from base_dmx import BaseDMX
 
 
 class Strobe(BaseDMX):
+    def __init__(self, device_index: int = 8):
+        """Initialize Strobe with specific device index
+
+        Args:
+            device_index: Index of the uDMX device to use (0 for first device)
+        """
+        super().__init__(device_index)
+
     def set_dimmer(self, value: int | None = None) -> None:
         self._send(1, value)
 
@@ -40,14 +48,19 @@ class Strobe(BaseDMX):
         self._send(7, value)
 
 
-strobe = Strobe()
+def test_strobe():
+    """Test function for strobe - call this instead of running at module level"""
+    with Strobe() as strobe:
+        strobe.set_dimmer(255)
+        strobe.set_strobe(216)
+        while True:
+            strobe.set_color(randint(0, 255))
+            time.sleep(1)
+            strobe.set_warm_white(0)
+            strobe.set_cold_white(0)
+            strobe.set_macro(0)
+            strobe.set_macro_speed(255)
 
-strobe.set_dimmer(255)
-strobe.set_strobe(223)
-while True:
-    strobe.set_color(randint(0, 255))
-    time.sleep(1)
-# strobe.set_warm_white(0)
-# strobe.set_cold_white(0)
-# strobe.set_macro(0)
-# strobe.set_macro_speed(255)
+
+if __name__ == "__main__":
+    test_strobe()

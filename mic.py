@@ -4,7 +4,7 @@ from typing import Any
 import numpy as np
 import pyaudio
 import soundcard
-from icecream import ic
+from loguru import logger
 
 MIC_RATE = 44100
 FPS = 60
@@ -14,7 +14,7 @@ FRAMES_PER_BUFFER = int(MIC_RATE / FPS)
 def get_microphone(mic_name: str = "Microphone Mic | Line | Instrument 1"):
     microphones = soundcard.all_microphones(include_loopback=True)
 
-    ic(microphones)
+    logger.debug(microphones)
 
     return [microphone for microphone in microphones if mic_name in str(microphone)][0]
 
@@ -31,7 +31,7 @@ def listen(microphone: Any = get_microphone()):
 def get_pyaudio_microphone():
     p = pyaudio.PyAudio()
     device_info = p.get_default_input_device_info()
-    ic(device_info)
+    logger.debug(device_info)
     return p.open(
         format=pyaudio.paInt16,
         channels=device_info["maxInputChannels"],
@@ -66,7 +66,7 @@ def start_stream(stream: Any):
 
 if __name__ == "__main__":
     # while True:
-    #     ic(listen())
+    #     logger.debug(listen())
     stream = get_pyaudio_microphone()
     while True:
-        ic(start_stream(stream))
+        logger.debug(start_stream(stream))

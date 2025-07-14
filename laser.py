@@ -3,6 +3,7 @@ import time
 from random import randint
 
 from loguru import logger
+
 from base_dmx import BaseDMX
 
 logger.remove()
@@ -10,6 +11,14 @@ logger.add(sys.stderr, level="INFO")
 
 
 class Laser(BaseDMX):
+    def __init__(self, device_index: int = 0):
+        """Initialize Laser with specific device index
+
+        Args:
+            device_index: Index of the uDMX device to use (0 for first device)
+        """
+        super().__init__(device_index)
+
     def on(self):
         self._send(1, 64)
         self._send(2, 255)
