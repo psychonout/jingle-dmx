@@ -20,7 +20,7 @@ def main():
             volume = start_stream(microphone)
             if volume > max_vol:
                 max_vol = volume
-                ic(max_vol)
+                logger.debug(max_vol)
             if volume >= trigger_size_at:
                 # trigger_mode_level_at = (volume + trigger_mode_level_at) / 2
                 all_random(laser)
