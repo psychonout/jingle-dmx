@@ -11,6 +11,18 @@ wheels = [
 ]
 
 [[package]]
+name = "blinkt"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "rpi-gpio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c0/33/fb5a3bfc2e9d467a6f9892088f08c0b88b4bbb0237a696b1b25cacab54d5/blinkt-0.1.2.tar.gz", hash = "sha256:db8f54a22a7382476e4ac7531974fe01baee916b01f415bf3817c02820d59f3f", size = 5178 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b9/24/b8244726dd74e6d140a162e2587e6df7d65cac18558f5df7cad9e9f9f1ff/blinkt-0.1.2-py3-none-any.whl", hash = "sha256:b090d1eccb5b8b5caaaeb25cfdb96f51cc12e98a8ab81c667c19b58b365f2818", size = 6577 },
+]
+
+[[package]]
 name = "cffi"
 version = "1.17.1"
 source = { registry = "https://pypi.org/simple" }
@@ -127,6 +139,7 @@ name = "jingle-dmx"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "blinkt" },
     { name = "icecream" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -139,6 +152,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "blinkt", specifier = ">=0.1.2" },
     { name = "icecream", specifier = ">=2.1.3" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "matplotlib", specifier = ">=3.10.0" },
@@ -350,6 +364,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/d9/6e/433a5614132576289
 wheels = [
     { url = "https://files.pythonhosted.org/packages/15/a8/4982498b2ab44d1fcd5c49f07ea3795eab01601dc143b009d333fcace3b9/pyusb-1.2.1-py3-none-any.whl", hash = "sha256:2b4c7cb86dbadf044dfb9d3a4ff69fd217013dbe78a792177a3feb172449ea36", size = 58439 },
 ]
+
+[[package]]
+name = "rpi-gpio"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c4/0f/10b524a12b3445af1c607c27b2f5ed122ef55756e29942900e5c950735f2/RPi.GPIO-0.7.1.tar.gz", hash = "sha256:cd61c4b03c37b62bba4a5acfea9862749c33c618e0295e7e90aa4713fb373b70", size = 29090 }
 
 [[package]]
 name = "ruff"

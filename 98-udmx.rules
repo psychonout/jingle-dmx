@@ -1,0 +1,4 @@
+# uDMX device rules
+SUBSYSTEM=="usb", ATTR{idVendor}=="16c0", ATTR{idProduct}=="05dc", MODE="0777", GROUP="plugdev"
+# Alternative rule for libusb access
+SUBSYSTEM=="usb", ATTR{idVendor}=="16c0", ATTR{idProduct}=="05dc", TAG+="uaccess"
