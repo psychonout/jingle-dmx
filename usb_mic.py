@@ -195,4 +195,3 @@ if __name__ == "__main__":
                     max_volume = volume
                 logger.debug(f"Volume: {volume:.2f}, Max: {max_volume:.2f}")
                 time.sleep(0.1)
-logger.debug()

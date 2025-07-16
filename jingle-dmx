@@ -1,0 +1,56 @@
+#!/bin/bash
+# Jingle DMX Service Management Script
+
+case "$1" in
+    start)
+        echo "Starting jingle-dmx service..."
+        sudo systemctl start jingle-dmx.service
+        ;;
+    stop)
+        echo "Stopping jingle-dmx service..."
+        sudo systemctl stop jingle-dmx.service
+        ;;
+    restart)
+        echo "Restarting jingle-dmx service..."
+        sudo systemctl restart jingle-dmx.service
+        ;;
+    status)
+        echo "Checking jingle-dmx service status..."
+        sudo systemctl status jingle-dmx.service
+        ;;
+    logs)
+        echo "Showing recent service logs..."
+        sudo journalctl -u jingle-dmx.service --no-pager -n 50
+        ;;
+    follow-logs)
+        echo "Following service logs (Ctrl+C to stop)..."
+        sudo journalctl -u jingle-dmx.service -f
+        ;;
+    service-logs)
+        echo "Showing service log file..."
+        tail -50 /home/pi/jingle-dmx/service.log
+        ;;
+    enable)
+        echo "Enabling jingle-dmx service for boot..."
+        sudo systemctl enable jingle-dmx.service
+        ;;
+    disable)
+        echo "Disabling jingle-dmx service from boot..."
+        sudo systemctl disable jingle-dmx.service
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status|logs|follow-logs|service-logs|enable|disable}"
+        echo ""
+        echo "Commands:"
+        echo "  start         - Start the service"
+        echo "  stop          - Stop the service"
+        echo "  restart       - Restart the service"
+        echo "  status        - Show service status"
+        echo "  logs          - Show recent systemd logs"
+        echo "  follow-logs   - Follow systemd logs in real-time"
+        echo "  service-logs  - Show application log file"
+        echo "  enable        - Enable service to start on boot"
+        echo "  disable       - Disable service from starting on boot"
+        exit 1
+        ;;
+esac

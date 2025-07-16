@@ -1,0 +1,25 @@
+[Unit]
+Description=Jingle DMX Audio-Reactive Light Controller
+After=network.target sound.target
+Wants=network.target sound.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/jingle-dmx
+Environment=HOME=/home/pi
+Environment=USER=pi
+Environment=PATH=/home/pi/jingle-dmx/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStartPre=/bin/sleep 10
+ExecStart=/home/pi/jingle-dmx/.venv/bin/python /home/pi/jingle-dmx/service_start.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Ensure proper permissions for GPIO and USB access
+SupplementaryGroups=audio plugdev gpio dialout
+
+[Install]
+WantedBy=multi-user.target

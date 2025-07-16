@@ -1,168 +1,206 @@
-import wave
-import numpy as np
-from blinkt import set_pixel, show, clear, set_brightness, NUM_PIXELS
+import colorsys
 import time
-import colorsys # For nice color transitions
-import sys
 
-# --- Audio File Configuration ---
-AUDIO_FILE = "test_audio.wav" # <-- CHANGE THIS to your WAV file path!
-
-# --- Blinkt! Configuration ---
-BL_BRIGHTNESS = 0.05 # Start with low brightness
-PEAK_LEVEL_THRESHOLD = 5000 # Adjust this! Represents the amplitude that makes all LEDs light up
-DECAY_RATE = 0.9 # How fast the bars fade down (0.0 to 1.0)
-MIN_BARS = 1 # Minimum number of bars to always show (e.g., for "idle" state)
-
-# --- DMX Control Placeholder (Same as before, just printing) ---
-dmx_effect_state = "idle"
-
-def map_value(value, in_min, in_max, out_min, out_max):
-    """Maps a value from one range to another."""
-    return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
-def get_color_from_hue(hue_normalized):
-    """Converts a normalized hue (0-1) to an RGB tuple (0-255)."""
-    r, g, b = colorsys.hsv_to_rgb(hue_normalized, 1.0, 1.0)
-    return int(r * 255), int(g * 255), int(b * 255)
-
-def get_peak_color(level, max_level):
-    """Returns a color (e.g., green-yellow-red) based on sound level."""
-    # Hue from green (0.33) to red (0.0)
-    hue = map_value(level, 0, max_level, 0.33, 0.0)
-    hue = max(0.0, min(0.33, hue)) # Clamp hue
-    return get_color_from_hue(hue)
-
-# --- DMX Control Placeholder Functions ---
-def set_dmx_effect(effect_type):
-    global dmx_effect_state # Declare as global to modify the variable
-    if dmx_effect_state == effect_type:
-        return # No change needed
-
-    dmx_effect_state = effect_type
-    if effect_type == "idle":
-        print("DMX: Setting effect to IDLE")
-        # DMX_controller.set_scene("ambient_blue")
-    elif effect_type == "medium":
-        print("DMX: Setting effect to MEDIUM")
-        # DMX_controller.set_scene("pulsing_green")
-    elif effect_type == "intense":
-        print("DMX: Setting effect to INTENSE")
-        # DMX_controller.set_scene("flashing_red_strobe")
-    # You'd add a call to your actual DMX library here, e.g.,
-    # dmx.set_channel(1, value) or fixture.set_color(...)
+from blinkt import NUM_PIXELS, clear, set_brightness, set_pixel, show
+from loguru import logger
 
 
-def main():
-    wf = None # Initialize to None for the finally block
-    try:
-        wf = wave.open(AUDIO_FILE, 'rb')
+class VUMeter:
+    """
+    A VU meter class for displaying volume levels on a Blinkt! LED strip.
+    Shows volume as a percentage with color-coded levels.
+    """
 
-        # Get audio file parameters
-        nchannels = wf.getnchannels()
-        sampwidth = wf.getsampwidth() # Bytes per sample
-        framerate = wf.getframerate()
-        nframes = wf.getnframes()
+    def __init__(self, brightness=0.2, decay_rate=0.8, min_bars=1, auto_scale=True):
+        """
+        Initialize the VU meter.
 
-        # Calculate chunk size (arbitrary, affects smoothness/responsiveness)
-        # We'll use a chunk size that corresponds to roughly 1/30th of a second
-        # for a smooth visual update, adjust as needed.
-        CHUNK_SIZE = int(framerate / 30) # Roughly 30 frames per second
-        if CHUNK_SIZE == 0: CHUNK_SIZE = 1 # Avoid zero division
+        Args:
+            brightness (float): LED brightness (0.0 to 1.0)
+            decay_rate (float): How fast the bars fade (0.0 to 1.0)
+            min_bars (int): Minimum number of bars to always show
+            auto_scale (bool): Whether to automatically scale max volume
+        """
+        self.brightness = brightness
+        self.decay_rate = decay_rate
+        self.min_bars = min_bars
+        self.auto_scale = auto_scale
+        self.max_volume = 500  # Starting max volume
+        self.max_volume_decay = 0.998  # Slow decay for max volume
+        self.current_level = 0
+        self.peak_level = 0
+        self.is_initialized = False
+        self.last_update_time = time.time()
 
-        # Determine dtype for numpy based on sample width
-        if sampwidth == 1:
-            dtype = np.int8 # 8-bit unsigned, but we'll convert to signed for analysis
-            print("Warning: 8-bit audio is often unsigned. Data might need normalization.")
-        elif sampwidth == 2:
-            dtype = np.int16 # 16-bit signed
-        elif sampwidth == 3:
-            dtype = 'int32' # 24-bit audio often read as 32-bit by wave
-            print("Warning: 24-bit audio. PyAudio would handle it, but wave module might give 32-bit. Max val will be adjusted.")
-        elif sampwidth == 4:
-            dtype = np.int32 # 32-bit signed
-        else:
-            raise ValueError(f"Unsupported sample width: {sampwidth} bytes")
+        # Initialize the LED strip
+        self._initialize_strip()
 
-        print(f"Reading '{AUDIO_FILE}': Channels={nchannels}, Sample Width={sampwidth} bytes, Rate={framerate} Hz, Frames={nframes}")
-        print(f"Processing in chunks of {CHUNK_SIZE} frames.")
-
-        set_brightness(BL_BRIGHTNESS)
-        clear()
-        show()
-
-        current_bars = 0
-        last_peak = 0
-
-        # Loop through the audio file
-        frame_index = 0
-        while frame_index < nframes:
-            # Read a chunk of frames
-            raw_data = wf.readframes(CHUNK_SIZE)
-            if not raw_data: # End of file
-                break
-
-            # Convert bytes to numpy array
-            # If stereo, take only one channel (e.g., left channel) for analysis
-            samples = np.frombuffer(raw_data, dtype=dtype)
-            if nchannels > 1:
-                # Assuming interleaved stereo: [L, R, L, R, ...]
-                samples = samples[::nchannels] # Take every 'nchannels'-th sample (e.g., left channel)
-
-            # --- Core Peak Bar Logic (Same as with live microphone) ---
-            # Calculate RMS (Root Mean Square) for overall loudness
-            # Ensure samples are not empty before calculating RMS
-            if samples.size > 0:
-                rms = np.sqrt(np.mean(samples**2))
-            else:
-                rms = 0 # No samples, so no sound
-
-            # Smooth the peak level for more stable bars and decay
-            if rms > last_peak:
-                last_peak = rms # New peak detected
-            else:
-                last_peak *= DECAY_RATE # Decay slowly
-
-            # Map the peak level to the number of bars
-            num_bars = int(map_value(last_peak, 0, PEAK_LEVEL_THRESHOLD, MIN_BARS, NUM_PIXELS))
-            num_bars = max(MIN_BARS, min(NUM_PIXELS, num_bars)) # Clamp between MIN_BARS and NUM_PIXELS
-
+    def _initialize_strip(self):
+        """Initialize the LED strip"""
+        try:
+            set_brightness(self.brightness)
             clear()
-            for i in range(num_bars):
-                r, g, b = get_peak_color(last_peak, PEAK_LEVEL_THRESHOLD)
-                set_pixel(i, r, g, b)
             show()
+            self.is_initialized = True
+            logger.debug("VU meter initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize VU meter: {e}")
+            self.is_initialized = False
 
-            # --- DMX Trigger Logic (Same as before) ---
-            if last_peak > PEAK_LEVEL_THRESHOLD * 0.8:
-                set_dmx_effect("intense")
-            elif last_peak < PEAK_LEVEL_THRESHOLD * 0.2:
-                set_dmx_effect("idle")
+    def _map_value(self, value, in_min, in_max, out_min, out_max):
+        """Map a value from one range to another"""
+        return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+    def _get_color_for_level(self, level_percentage):
+        """
+        Get color based on volume level percentage.
+
+        Args:
+            level_percentage (float): Volume level as percentage (0.0 to 1.0)
+
+        Returns:
+            tuple: RGB color values (0-255)
+        """
+        if level_percentage < 0.3:
+            # Green for low levels
+            hue = 0.33  # Green
+        elif level_percentage < 0.7:
+            # Yellow for medium levels
+            hue = 0.16  # Yellow
+        else:
+            # Red for high levels
+            hue = 0.0  # Red
+
+        # Adjust saturation and brightness based on level
+        saturation = 0.8 + (level_percentage * 0.2)  # 0.8 to 1.0
+        brightness = 0.5 + (level_percentage * 0.5)  # 0.5 to 1.0
+
+        r, g, b = colorsys.hsv_to_rgb(hue, saturation, brightness)
+        return int(r * 255), int(g * 255), int(b * 255)
+
+    def update(self, volume):
+        """
+        Update the VU meter with a new volume reading.
+
+        Args:
+            volume (float): Current volume level
+        """
+        if not self.is_initialized:
+            logger.warning("VU meter not initialized, skipping update")
+            return
+
+        current_time = time.time()
+        time_delta = current_time - self.last_update_time
+        self.last_update_time = current_time
+
+        # Auto-scale max volume with decay
+        if self.auto_scale:
+            # If current volume is higher than max, increase max
+            if volume > self.max_volume:
+                self.max_volume = volume * 1.1  # Add 10% headroom
+                logger.debug(f"Max volume increased to: {self.max_volume:.1f}")
             else:
-                set_dmx_effect("medium")
+                # Slowly decay max volume so it can adjust downward
+                self.max_volume *= self.max_volume_decay
+                # Don't let max volume go below a reasonable minimum
+                self.max_volume = max(self.max_volume, 100)
 
-            frame_index += CHUNK_SIZE
-            # To simulate real-time playback, add a delay
-            # This makes the visualization play at the actual speed of the audio file
-            # If you want it to process as fast as possible, remove or reduce this sleep.
-            # However, for a visual test, matching playback speed is often helpful.
-            time.sleep(CHUNK_SIZE / framerate)
+        # Calculate current level with decay
+        if volume > self.peak_level:
+            self.peak_level = volume
+        else:
+            # Apply decay based on time elapsed
+            decay_factor = self.decay_rate ** (time_delta * 60)  # Adjust for frame rate
+            self.peak_level *= decay_factor
 
-        print("\nFinished playing audio file.")
+        # Calculate percentage (0.0 to 1.0)
+        level_percentage = min(1.0, self.peak_level / self.max_volume)
 
-    except FileNotFoundError:
-        print(f"Error: Audio file '{AUDIO_FILE}' not found.", file=sys.stderr)
-        sys.exit(1)
-    except wave.Error as e:
-        print(f"Error reading WAV file: {e}", file=sys.stderr)
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\nStopping playback and Blinkt!.")
-    finally:
-        if wf is not None:
-            wf.close()
+        # Calculate number of bars to light up
+        num_bars = max(self.min_bars, int(level_percentage * NUM_PIXELS))
+        num_bars = min(NUM_PIXELS, num_bars)
+
+        # Clear all pixels
         clear()
+
+        # Light up the appropriate number of bars (reversed order)
+        for i in range(num_bars):
+            # Each bar gets progressively brighter color
+            bar_percentage = (i + 1) / NUM_PIXELS
+            r, g, b = self._get_color_for_level(bar_percentage)
+            # Set pixel from the end (NUM_PIXELS - 1 - i) to reverse the direction
+            set_pixel(NUM_PIXELS - 1 - i, r, g, b)
+
+        # Add a peak indicator (brightest pixel at current level)
+        if num_bars > 0:
+            peak_bar = min(NUM_PIXELS - 1, int(level_percentage * NUM_PIXELS))
+            r, g, b = self._get_color_for_level(level_percentage)
+            # Make peak bar brighter
+            r = min(255, int(r * 1.5))
+            g = min(255, int(g * 1.5))
+            b = min(255, int(b * 1.5))
+            # Set peak pixel from the end to reverse the direction
+            set_pixel(NUM_PIXELS - 1 - peak_bar, r, g, b)
+
+        # Update the display
         show()
+
+        # Log debug info occasionally
+        if int(current_time * 2) % 10 == 0:  # Every 5 seconds
+            logger.debug(
+                f"VU: vol={volume:.1f}, level={level_percentage:.2f}, bars={num_bars}, max_vol={self.max_volume:.1f}"
+            )
+
+    def set_max_volume(self, max_volume):
+        """
+        Manually set the maximum volume level.
+
+        Args:
+            max_volume (float): Maximum volume level for scaling
+        """
+        self.max_volume = max_volume
+        logger.debug(f"Max volume set to: {max_volume}")
+
+    def reset(self):
+        """Reset the VU meter to initial state"""
+        if self.is_initialized:
+            clear()
+            show()
+            self.peak_level = 0
+            self.current_level = 0
+            logger.debug("VU meter reset")
+
+    def cleanup(self):
+        """Clean up the VU meter"""
+        if self.is_initialized:
+            clear()
+            show()
+            logger.debug("VU meter cleaned up")
+
+    def __enter__(self):
+        """Context manager entry"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit"""
+        self.cleanup()
+
+
+def test_vu_meter():
+    """Test function for the VU meter"""
+    logger.info("Testing VU meter...")
+
+    with VUMeter(brightness=0.3, decay_rate=0.9) as vu:
+        # Test with increasing volume levels
+        test_volumes = [0, 50, 100, 200, 500, 800, 1000, 1200, 800, 400, 100, 0]
+
+        for volume in test_volumes:
+            logger.info(f"Testing volume: {volume}")
+            vu.update(volume)
+            time.sleep(0.5)
+
+    logger.info("VU meter test complete")
+
 
 if __name__ == "__main__":
-    main()
+    test_vu_meter()
