@@ -98,7 +98,7 @@ def main():
     # Start the main application
     logger.info("Starting main application...")
     try:
-        from main_usb import main as main_app
+        from main import main as main_app
 
         main_app()
     except KeyboardInterrupt:

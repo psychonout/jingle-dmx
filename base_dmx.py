@@ -8,10 +8,9 @@ logger.add(sys.stderr, level="INFO")
 
 
 class BaseDMX:
-    status = False
-
-    def __init__(self) -> None:
+    def __init__(self, dmx_channel: int = 1) -> None:
         """Initialize DMX device"""
+        self.dmx_channel = dmx_channel
         self._dev = uDMXDevice()
         self._dev.open()
 
@@ -32,8 +31,8 @@ class BaseDMX:
 
         """
         try:
-            self._dev.send_single_value(channel, value)
-            logger.debug(f"DMX: Channel {channel} = {value}")
+            self._dev.send_single_value(self.dmx_channel + channel, value)
+            logger.debug(f"DMX: Channel {self.dmx_channel + channel} = {value}")
         except Exception as e:
             logger.error(f"DMX send error: {e}")
             pass
@@ -43,3 +42,20 @@ class BaseDMX:
         for i in range(1, 513):
             self._send(i, 0)
         logger.debug("DMX device reset to default settings.")
+
+
+def test_device():
+    dmx = BaseDMX()
+    for i in range(1, 513):
+        if i != 7:
+            continue
+        for j in range(1, 256):
+            dmx._send(i, j)
+            print(f"Channel {i} - {j}")
+            import time
+
+            time.sleep(0.1)
+
+
+if __name__ == "__main__":
+    test_device()

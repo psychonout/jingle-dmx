@@ -11,13 +11,13 @@ logger.add(sys.stderr, level="INFO")
 
 
 class Laser(BaseDMX):
-    def __init__(self, device_index: int = 0):
-        """Initialize Laser with specific device index
+    def __init__(self, dmx_channel: int = 1):
+        """Initialize Laser with specific DMX channel
 
         Args:
             device_index: Index of the uDMX device to use (0 for first device)
         """
-        super().__init__(device_index)
+        super().__init__(dmx_channel)
 
     def on(self):
         self._send(1, 64)
@@ -25,10 +25,6 @@ class Laser(BaseDMX):
 
     def off(self):
         self._send(1, 0)
-
-    def reset(self):
-        for i in range(1, 11):
-            self._send(i, 0)
 
     def set_mode(self, mode: str) -> None:
         """sets the mode of the laser
