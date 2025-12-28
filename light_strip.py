@@ -1,5 +1,8 @@
 import colorsys
+import threading
 import time
+import random
+from typing import Optional
 
 from blinkt import NUM_PIXELS, clear, set_brightness, set_pixel, show
 from loguru import logger
@@ -9,34 +12,55 @@ class VUMeter:
     """
     A VU meter class for displaying volume levels on a Blinkt! LED strip.
     Shows volume as a percentage with color-coded levels.
+
+    Optimized to run LED updates in a background thread to avoid blocking
+    the main audio processing loop.
     """
 
-    def __init__(self, brightness=0.2, decay_rate=0.8, min_bars=1, auto_scale=True):
-        """
-        Initialize the VU meter.
-
-        Args:
-            brightness (float): LED brightness (0.0 to 1.0)
-            decay_rate (float): How fast the bars fade (0.0 to 1.0)
-            min_bars (int): Minimum number of bars to always show
-            auto_scale (bool): Whether to automatically scale max volume
-        """
+    def __init__(
+        self,
+        brightness=0.2,
+        decay_rate=0.8,
+        min_bars=1,
+        auto_scale=False,
+        reverse=False,
+        color_start_hue: float = 0.75,
+        color_end_hue: float = 1,
+        min_saturation: float = 0.85,
+        max_saturation: float = 1.0,
+        min_brightness: float = 0.03,
+        max_brightness: float = 0.25,
+    ):
         self.brightness = brightness
         self.decay_rate = decay_rate
         self.min_bars = min_bars
         self.auto_scale = auto_scale
-        self.max_volume = 500  # Starting max volume
-        self.max_volume_decay = 0.998  # Slow decay for max volume
+        self.reverse = reverse
+        self.max_volume = 500
+        self.max_volume_decay = 0.995
         self.current_level = 0
         self.peak_level = 0
         self.is_initialized = False
         self.last_update_time = time.time()
 
-        # Initialize the LED strip
+        # Threading support
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._latest_volume = 0.0
+        self._lock = threading.Lock()
+
         self._initialize_strip()
 
+        self.color_start_hue = color_start_hue
+        self.color_end_hue = color_end_hue
+        self.min_saturation = min_saturation
+        self.max_saturation = max_saturation
+        self.min_brightness = min_brightness
+        self.max_brightness = max_brightness
+        self._led_caps = None
+        self.was_on = False
+
     def _initialize_strip(self):
-        """Initialize the LED strip"""
         try:
             set_brightness(self.brightness)
             clear()
@@ -47,159 +71,200 @@ class VUMeter:
             logger.error(f"Failed to initialize VU meter: {e}")
             self.is_initialized = False
 
+    def start(self):
+        """Start the background update thread"""
+        if self._thread is not None and self._thread.is_alive():
+            return
+
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._update_loop, daemon=True)
+        self._thread.start()
+        logger.debug("VU meter background thread started")
+
+    def stop(self):
+        """Stop the background update thread"""
+        if self._thread is None:
+            return
+
+        self._stop_event.set()
+        self._thread.join(timeout=1.0)
+        self._thread = None
+        logger.debug("VU meter background thread stopped")
+
+    def _update_loop(self):
+        """Background loop to update LEDs at a fixed rate"""
+        target_fps = 60
+        frame_time = 1.0 / target_fps
+
+        while not self._stop_event.is_set():
+            start_time = time.time()
+
+            # Get latest volume safely
+            with self._lock:
+                volume = self._latest_volume
+
+            self._process_frame(volume)
+
+            # Sleep to maintain frame rate
+            elapsed = time.time() - start_time
+            sleep_time = max(0, frame_time - elapsed)
+            time.sleep(sleep_time)
+
     def _map_value(self, value, in_min, in_max, out_min, out_max):
-        """Map a value from one range to another"""
         return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
     def _get_color_for_level(self, level_percentage):
-        """
-        Get color based on volume level percentage.
+        hue = self.color_start_hue + (self.color_end_hue - self.color_start_hue) * level_percentage
 
-        Args:
-            level_percentage (float): Volume level as percentage (0.0 to 1.0)
+        min_sat, max_sat = (
+            (self.min_saturation, self.max_saturation)
+            if self.min_saturation <= self.max_saturation
+            else (self.max_saturation, self.min_saturation)
+        )
+        saturation = min_sat + (max_sat - min_sat) * level_percentage
 
-        Returns:
-            tuple: RGB color values (0-255)
-        """
-        if level_percentage < 0.3:
-            # Green for low levels
-            hue = 0.33  # Green
-        elif level_percentage < 0.7:
-            # Yellow for medium levels
-            hue = 0.16  # Yellow
-        else:
-            # Red for high levels
-            hue = 0.0  # Red
-
-        # Adjust saturation and brightness based on level
-        saturation = 0.8 + (level_percentage * 0.2)  # 0.8 to 1.0
-        brightness = 0.5 + (level_percentage * 0.5)  # 0.5 to 1.0
+        min_b, max_b = (
+            (self.min_brightness, self.max_brightness)
+            if self.min_brightness <= self.max_brightness
+            else (self.max_brightness, self.min_brightness)
+        )
+        brightness = min_b + (max_b - min_b) * level_percentage
 
         r, g, b = colorsys.hsv_to_rgb(hue, saturation, brightness)
         return int(r * 255), int(g * 255), int(b * 255)
 
-    def update(self, volume):
-        """
-        Update the VU meter with a new volume reading.
+    def _cap_color_per_led(self, rgb, pixel_index):
+        if self._led_caps is None:
+            lower_count = max(0, NUM_PIXELS - 3)
+            caps = [64] * lower_count
+            ramp_steps = NUM_PIXELS - lower_count
+            for i in range(ramp_steps):
+                pct = (i + 1) / float(ramp_steps)
+                caps.append(int(64 + pct * (128 - 64)))
+            self._led_caps = caps
 
-        Args:
-            volume (float): Current volume level
-        """
+        cap = self._led_caps[pixel_index]
+        r, g, b = rgb
+        max_channel = max(r, g, b)
+        if max_channel <= cap or max_channel == 0:
+            return r, g, b
+        scale = cap / float(max_channel)
+        return int(r * scale), int(g * scale), int(b * scale)
+
+    def update(self, volume):
+        """Update the target volume (thread-safe)"""
         if not self.is_initialized:
-            logger.warning("VU meter not initialized, skipping update")
             return
 
+        with self._lock:
+            self._latest_volume = volume
+
+    def _process_frame(self, volume):
+        """Internal method to render one frame (called by background thread)"""
         current_time = time.time()
         time_delta = current_time - self.last_update_time
         self.last_update_time = current_time
 
-        # Auto-scale max volume with decay
         if self.auto_scale:
-            # If current volume is higher than max, increase max
             if volume > self.max_volume:
-                self.max_volume = volume * 1.1  # Add 10% headroom
-                logger.debug(f"Max volume increased to: {self.max_volume:.1f}")
+                self.max_volume = volume * 1.1
             else:
-                # Slowly decay max volume so it can adjust downward
                 self.max_volume *= self.max_volume_decay
-                # Don't let max volume go below a reasonable minimum
                 self.max_volume = max(self.max_volume, 100)
 
-        # Calculate current level with decay
         if volume > self.peak_level:
             self.peak_level = volume
         else:
-            # Apply decay based on time elapsed
-            decay_factor = self.decay_rate ** (time_delta * 60)  # Adjust for frame rate
+            decay_factor = self.decay_rate ** (time_delta * 30)
             self.peak_level *= decay_factor
 
-        # Calculate percentage (0.0 to 1.0)
         level_percentage = min(1.0, self.peak_level / self.max_volume)
-
-        # Calculate number of bars to light up
         num_bars = max(self.min_bars, int(level_percentage * NUM_PIXELS))
         num_bars = min(NUM_PIXELS, num_bars)
 
-        # Clear all pixels
-        clear()
+        if num_bars == 0:
+            if self.was_on:
+                shift = random.random()
+                self.color_start_hue = (self.color_start_hue + shift) % 1.0
+                self.color_end_hue = (self.color_end_hue + shift) % 1.0
+                self.was_on = False
+            clear()
+            show()
+        else:
+            self.was_on = True
+            clear()
+            for i in range(num_bars):
+                bar_percentage = (i + 1) / NUM_PIXELS
+                r, g, b = self._get_color_for_level(bar_percentage)
+                pixel_index = (NUM_PIXELS - 1 - i) if self.reverse else i
+                r, g, b = self._cap_color_per_led((r, g, b), pixel_index)
+                set_pixel(pixel_index, r, g, b)
 
-        # Light up the appropriate number of bars (reversed order)
-        for i in range(num_bars):
-            # Each bar gets progressively brighter color
-            bar_percentage = (i + 1) / NUM_PIXELS
-            r, g, b = self._get_color_for_level(bar_percentage)
-            # Set pixel from the end (NUM_PIXELS - 1 - i) to reverse the direction
-            set_pixel(NUM_PIXELS - 1 - i, r, g, b)
+            if num_bars > 1:
+                peak_bar = min(NUM_PIXELS - 1, int(level_percentage * NUM_PIXELS))
+                r, g, b = self._get_color_for_level(level_percentage)
+                r = min(255, int(r * 1.25))
+                g = min(255, int(g * 1.25))
+                b = min(255, int(b * 1.25))
+                pixel_index = (NUM_PIXELS - 1 - peak_bar) if self.reverse else peak_bar
+                r, g, b = self._cap_color_per_led((r, g, b), pixel_index)
+                set_pixel(pixel_index, r, g, b)
 
-        # Add a peak indicator (brightest pixel at current level)
-        if num_bars > 0:
-            peak_bar = min(NUM_PIXELS - 1, int(level_percentage * NUM_PIXELS))
-            r, g, b = self._get_color_for_level(level_percentage)
-            # Make peak bar brighter
-            r = min(255, int(r * 1.5))
-            g = min(255, int(g * 1.5))
-            b = min(255, int(b * 1.5))
-            # Set peak pixel from the end to reverse the direction
-            set_pixel(NUM_PIXELS - 1 - peak_bar, r, g, b)
-
-        # Update the display
-        show()
-
-        # Log debug info occasionally
-        if int(current_time * 2) % 10 == 0:  # Every 5 seconds
-            logger.debug(
-                f"VU: vol={volume:.1f}, level={level_percentage:.2f}, bars={num_bars}, max_vol={self.max_volume:.1f}"
-            )
+            show()
 
     def set_max_volume(self, max_volume):
-        """
-        Manually set the maximum volume level.
-
-        Args:
-            max_volume (float): Maximum volume level for scaling
-        """
         self.max_volume = max_volume
-        logger.debug(f"Max volume set to: {max_volume}")
 
     def reset(self):
-        """Reset the VU meter to initial state"""
         if self.is_initialized:
             clear()
             show()
             self.peak_level = 0
             self.current_level = 0
-            logger.debug("VU meter reset")
 
     def cleanup(self):
-        """Clean up the VU meter"""
+        self.stop()
         if self.is_initialized:
             clear()
             show()
-            logger.debug("VU meter cleaned up")
 
     def __enter__(self):
-        """Context manager entry"""
+        self.start()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
         self.cleanup()
+
+    def set_color_range(
+        self,
+        start_hue: float,
+        end_hue: float,
+        min_saturation: Optional[float] = None,
+        max_saturation: Optional[float] = None,
+        min_brightness: Optional[float] = None,
+        max_brightness: Optional[float] = None,
+    ) -> None:
+        self.color_start_hue = start_hue
+        self.color_end_hue = end_hue
+        if min_saturation is not None:
+            self.min_saturation = min_saturation
+        if max_saturation is not None:
+            self.max_saturation = max_saturation
+        if min_brightness is not None:
+            self.min_brightness = min_brightness
+        if max_brightness is not None:
+            self.max_brightness = max_brightness
 
 
 def test_vu_meter():
-    """Test function for the VU meter"""
-    logger.info("Testing VU meter...")
-
+    logger.debug("Testing VU meter...")
     with VUMeter(brightness=0.3, decay_rate=0.9) as vu:
-        # Test with increasing volume levels
         test_volumes = [0, 50, 100, 200, 500, 800, 1000, 1200, 800, 400, 100, 0]
-
         for volume in test_volumes:
-            logger.info(f"Testing volume: {volume}")
+            logger.debug(f"Testing volume: {volume}")
             vu.update(volume)
             time.sleep(0.5)
-
-    logger.info("VU meter test complete")
+    logger.debug("VU meter test complete")
 
 
 if __name__ == "__main__":

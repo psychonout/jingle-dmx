@@ -6,7 +6,7 @@ from base_dmx import BaseDMX
 
 class Spotlight(BaseDMX):
     def __init__(self, dmx_channel: int = 22) -> None:
-        super().__init__(dmx_channel)
+        super().__init__(dmx_channel, num_channels=8)
         self.current_color = (0, 0, 0, 0)  # R, G, B, W
         self.current_brightness = 0
 
@@ -44,6 +44,10 @@ class Spotlight(BaseDMX):
 
     def set_color_rgb(self, red: int, green: int, blue: int, white: int = 0) -> None:
         """Set full RGB+W color at once."""
+        # Disable macros to ensure color is visible
+        self.set_macro(0)
+        self.set_macro_speed(0)
+
         self.set_red(red)
         self.set_green(green)
         self.set_blue(blue)
@@ -89,7 +93,13 @@ class Spotlight(BaseDMX):
         self.set_brightness(0)
         self.set_color_rgb(0, 0, 0, 0)
         self.set_strobe(0)
+        self.set_macro(0)
+        self.set_macro_speed(0)
         self.current_brightness = 0
+
+    def reset(self) -> None:
+        """Reset the spotlight to default state."""
+        self.turn_off()
 
     def flash_color(self, color_preset: str, duration: float = 0.3) -> None:
         """Flash a specific color briefly."""
@@ -196,17 +206,22 @@ class Spotlight(BaseDMX):
         base_brightness = 50
         volume_brightness = min(int(volume * 2), 100)  # Subtle volume response
 
-        # Soft color palette
-        colors = [
-            (255, 200, 150, 50),  # Warm white
-            (255, 150, 100, 30),  # Warm orange
-            (200, 255, 200, 40),  # Soft green
-            (200, 200, 255, 60),  # Cool white
-        ]
+        # More varied color palette with reds and random elements
+        # Using time to slowly cycle through base colors
+        t = time.time() * 0.2  # Slow cycle
 
-        # Choose color based on volume level
-        color_index = min(int(volume / 50), len(colors) - 1)
-        r, g, b, w = colors[color_index]
+        # Generate a slowly changing color
+        import math
+        r = int(127 + 127 * math.sin(t))
+        g = int(127 + 127 * math.sin(t + 2.0))
+        b = int(127 + 127 * math.sin(t + 4.0))
+
+        # Bias towards red/warm colors for ambient
+        r = min(255, int(r * 1.2))
+        b = int(b * 0.7)  # Reduce blue
+
+        # Add some white for softness
+        w = 30
 
         self.set_color_rgb(r, g, b, w)
         self.set_brightness(base_brightness + volume_brightness)
