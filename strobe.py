@@ -1,16 +1,15 @@
-import time
-from random import randint
-
-from loguru import logger
-
 from base_dmx import BaseDMX
 
 
 class Strobe(BaseDMX):
-    def set_dimmer(self, value: int | None = None) -> None:
-        self._send(1, value)
+    def __init__(self, dmx_channel: int = 11) -> None:
+        """Initialize Strobe with specific device index"""
+        super().__init__(dmx_channel, num_channels=7)
 
-    def set_strobe(self, value: int | None = None) -> None:
+    def set_dimmer(self, value: int) -> None:
+        self._send(0, value)
+
+    def set_strobe(self, value: int) -> None:
         """
         Set the strobe effect.
         0-31 - Strobe off
@@ -22,32 +21,19 @@ class Strobe(BaseDMX):
         192-223 - Random strobe effect
         224-255 - Strobe full on
         """
-        self._send(2, value)
+        self._send(1, value)
 
     def set_warm_white(self, value: int) -> None:
-        self._send(3, value)
+        self._send(2, value)
 
     def set_cold_white(self, value: int) -> None:
-        self._send(4, value)
+        self._send(3, value)
 
     def set_color(self, value: int) -> None:
-        self._send(5, value)
+        self._send(4, value)
 
     def set_macro(self, value: int) -> None:
-        self._send(6, value)
+        self._send(5, value)
 
     def set_macro_speed(self, value: int) -> None:
-        self._send(7, value)
-
-
-strobe = Strobe()
-
-strobe.set_dimmer(255)
-strobe.set_strobe(223)
-while True:
-    strobe.set_color(randint(0, 255))
-    time.sleep(1)
-# strobe.set_warm_white(0)
-# strobe.set_cold_white(0)
-# strobe.set_macro(0)
-# strobe.set_macro_speed(255)
+        self._send(6, value)
