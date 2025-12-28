@@ -14,4 +14,16 @@ dependencies = [
     "soundcard>=0.4.3",
     "udmx-pyusb>=2.0.0",
     "uv>=0.5.13",
+    "cython>=3.0.0",
+    "numpy>=1.26.0",
+    "py-spy>=0.4.1",
 ]
+
+[build-system]
+requires = [
+  "setuptools>=65",
+  "wheel",
+  "Cython>=3.0.0",
+  "numpy>=1.26.0",
+]
+build-backend = "setuptools.build_meta"

@@ -20,7 +20,7 @@ def list_usb_devices():
         import usb.core
         import usb.util
 
-        logger.info("=== USB Devices ===")
+        logger.debug("=== USB Devices ===")
         devices = usb.core.find(find_all=True)
 
         for device in devices:
@@ -35,7 +35,7 @@ def list_usb_devices():
                     if device.iProduct
                     else "Unknown"
                 )
-                logger.info(
+                logger.debug(
                     f"Device: {manufacturer} - {product} (VID: {hex(device.idVendor)}, PID: {hex(device.idProduct)})"
                 )
             except Exception as e:
@@ -50,7 +50,7 @@ def list_usb_devices():
 def test_single_device(device_id: Optional[int] = None) -> bool:
     """Test a single uDMX device"""
     try:
-        logger.info(f"Testing uDMX device {device_id if device_id else 'default'}...")
+        logger.debug(f"Testing uDMX device {device_id if device_id else 'default'}...")
 
         # Create device instance
         if device_id is not None:
@@ -61,23 +61,23 @@ def test_single_device(device_id: Optional[int] = None) -> bool:
 
         # Try to open the device
         dev.open()
-        logger.info("✓ Device opened successfully")
+        logger.debug("✓ Device opened successfully")
 
         # Test basic communication by sending values to different channels
         test_channels = [1, 2, 3, 4, 5]
         test_values = [255, 128, 64, 32, 0]
 
-        logger.info("Testing channel communication...")
+        logger.debug("Testing channel communication...")
         for channel, value in zip(test_channels, test_values):
             try:
                 dev.send_single_value(channel, value)
-                logger.info(f"✓ Channel {channel}: sent value {value}")
+                logger.debug(f"✓ Channel {channel}: sent value {value}")
                 time.sleep(0.1)
             except Exception as e:
                 logger.error(f"✗ Channel {channel}: failed to send value {value} - {e}")
 
         # Test sending all channels to 0 (reset)
-        logger.info("Resetting all channels to 0...")
+        logger.debug("Resetting all channels to 0...")
         for channel in range(1, 513):  # DMX has 512 channels
             try:
                 dev.send_single_value(channel, 0)
@@ -85,11 +85,11 @@ def test_single_device(device_id: Optional[int] = None) -> bool:
                 logger.debug(f"Channel {channel} reset failed: {e}")
                 break
 
-        logger.info("✓ Reset complete")
+        logger.debug("✓ Reset complete")
 
         # Close device
         dev.close()
-        logger.info("✓ Device closed successfully")
+        logger.debug("✓ Device closed successfully")
 
         return True
 
@@ -100,13 +100,13 @@ def test_single_device(device_id: Optional[int] = None) -> bool:
 
 def test_multiple_devices():
     """Attempt to test multiple uDMX devices"""
-    logger.info("=== Testing Multiple uDMX Devices ===")
+    logger.debug("=== Testing Multiple uDMX Devices ===")
 
     devices_found = []
 
     # Try to find and test multiple devices
     for device_num in range(5):  # Test up to 5 potential devices
-        logger.info(f"\n--- Testing Device {device_num} ---")
+        logger.debug(f"\n--- Testing Device {device_num} ---")
 
         try:
             # Create separate device instances
@@ -119,19 +119,19 @@ def test_multiple_devices():
             dev.send_single_value(1, 0)
 
             devices_found.append(dev)
-            logger.info(f"✓ Device {device_num} is working")
+            logger.debug(f"✓ Device {device_num} is working")
 
         except Exception as e:
             logger.debug(f"Device {device_num} not found or failed: {e}")
             break
 
-    logger.info(f"\nFound {len(devices_found)} working uDMX device(s)")
+    logger.debug(f"\nFound {len(devices_found)} working uDMX device(s)")
 
     # Close all devices
     for i, dev in enumerate(devices_found):
         try:
             dev.close()
-            logger.info(f"✓ Closed device {i}")
+            logger.debug(f"✓ Closed device {i}")
         except Exception as e:
             logger.error(f"✗ Failed to close device {i}: {e}")
 
@@ -140,18 +140,18 @@ def test_multiple_devices():
 
 def interactive_test():
     """Interactive test to manually control channels"""
-    logger.info("=== Interactive uDMX Test ===")
+    logger.debug("=== Interactive uDMX Test ===")
 
     try:
         dev = uDMXDevice()
         dev.open()
-        logger.info("Device opened for interactive testing")
+        logger.debug("Device opened for interactive testing")
 
-        logger.info("Commands:")
-        logger.info("  set <channel> <value>  - Set channel to value (1-512, 0-255)")
-        logger.info("  reset                  - Set all channels to 0")
-        logger.info("  test                   - Run test pattern")
-        logger.info("  quit                   - Exit")
+        logger.debug("Commands:")
+        logger.debug("  set <channel> <value>  - Set channel to value (1-512, 0-255)")
+        logger.debug("  reset                  - Set all channels to 0")
+        logger.debug("  test                   - Run test pattern")
+        logger.debug("  quit                   - Exit")
 
         while True:
             try:
@@ -160,17 +160,17 @@ def interactive_test():
                 if cmd == "quit":
                     break
                 elif cmd == "reset":
-                    logger.info("Resetting all channels...")
+                    logger.debug("Resetting all channels...")
                     for ch in range(1, 513):
                         dev.send_single_value(ch, 0)
-                    logger.info("✓ All channels reset")
+                    logger.debug("✓ All channels reset")
                 elif cmd == "test":
-                    logger.info("Running test pattern...")
+                    logger.debug("Running test pattern...")
                     for ch in range(1, 11):
                         dev.send_single_value(ch, 255)
                         time.sleep(1)
                         dev.send_single_value(ch, 0)
-                    logger.info("✓ Test pattern complete")
+                    logger.debug("✓ Test pattern complete")
                 elif cmd.startswith("set "):
                     parts = cmd.split()
                     if len(parts) == 3:
@@ -178,7 +178,7 @@ def interactive_test():
                         value = int(parts[2])
                         if 1 <= channel <= 512 and 0 <= value <= 255:
                             dev.send_single_value(channel, value)
-                            logger.info(f"✓ Channel {channel} set to {value}")
+                            logger.debug(f"✓ Channel {channel} set to {value}")
                         else:
                             logger.error("Channel must be 1-512, value must be 0-255")
                     else:
@@ -192,7 +192,7 @@ def interactive_test():
                 logger.error(f"Error: {e}")
 
         dev.close()
-        logger.info("Device closed")
+        logger.debug("Device closed")
 
     except Exception as e:
         logger.error(f"Interactive test failed: {e}")
@@ -200,24 +200,24 @@ def interactive_test():
 
 def main():
     """Main test function"""
-    logger.info("=== uDMX Device Test Suite ===")
+    logger.debug("=== uDMX Device Test Suite ===")
 
     # List USB devices
     list_usb_devices()
 
     # Test single device
-    logger.info("\n=== Single Device Test ===")
+    logger.debug("\n=== Single Device Test ===")
     if test_single_device():
-        logger.info("✓ Single device test passed")
+        logger.debug("✓ Single device test passed")
     else:
         logger.error("✗ Single device test failed")
 
     # Test multiple devices
-    logger.info("\n=== Multiple Device Test ===")
+    logger.debug("\n=== Multiple Device Test ===")
     device_count = test_multiple_devices()
 
     if device_count > 0:
-        logger.info(f"✓ Found {device_count} working uDMX device(s)")
+        logger.debug(f"✓ Found {device_count} working uDMX device(s)")
 
         # Ask if user wants interactive test
         try:
@@ -233,7 +233,7 @@ def main():
     else:
         logger.error("✗ No working uDMX devices found")
 
-    logger.info("\n=== Test Complete ===")
+    logger.debug("\n=== Test Complete ===")
 
 
 if __name__ == "__main__":

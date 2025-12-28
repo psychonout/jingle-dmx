@@ -11,8 +11,9 @@ WorkingDirectory=/home/pi/jingle-dmx
 Environment=HOME=/home/pi
 Environment=USER=pi
 Environment=PATH=/home/pi/jingle-dmx/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=SHOW_PROFILE=club
 ExecStartPre=/bin/sleep 1
-ExecStart=/home/pi/jingle-dmx/.venv/bin/python /home/pi/jingle-dmx/service_start.py
+ExecStart=/home/pi/jingle-dmx/.venv/bin/python /home/pi/jingle-dmx/main.py
 Restart=always
 RestartSec=5
 StandardOutput=journal

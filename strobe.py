@@ -4,12 +4,12 @@ from base_dmx import BaseDMX
 class Strobe(BaseDMX):
     def __init__(self, dmx_channel: int = 11) -> None:
         """Initialize Strobe with specific device index"""
-        super().__init__(dmx_channel)
+        super().__init__(dmx_channel, num_channels=7)
 
-    def set_dimmer(self, value: int | None = None) -> None:
+    def set_dimmer(self, value: int) -> None:
         self._send(0, value)
 
-    def set_strobe(self, value: int | None = None) -> None:
+    def set_strobe(self, value: int) -> None:
         """
         Set the strobe effect.
         0-31 - Strobe off

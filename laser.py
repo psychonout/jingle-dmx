@@ -17,7 +17,7 @@ class Laser(BaseDMX):
         Args:
             device_index: Index of the uDMX device to use (0 for first device)
         """
-        super().__init__(dmx_channel)
+        super().__init__(dmx_channel, num_channels=9)
 
     def on(self):
         self._send(1, 64)
@@ -211,7 +211,7 @@ def draw_something():
         laser.set_mode("manual")
         while True:
             mode_level = randint(0, 256)
-            logger.info(mode_level)
+            logger.debug(mode_level)
             laser.set_mode_level(mode_level)
 
             for i in range(0, 128):
@@ -243,5 +243,5 @@ if __name__ == "__main__":
             # for i in range(255):
             #     laser.color(i)
             #     time.sleep(0.1)
-            logger.info(f"pattern: {i}")
+            logger.debug(f"pattern: {i}")
             time.sleep(0.5)

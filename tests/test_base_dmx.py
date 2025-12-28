@@ -23,7 +23,7 @@ class TestDMX(BaseDMX):
 
     def test_channels(self, start_channel: int = 1, num_channels: int = 10):
         """Test a range of channels"""
-        logger.info(
+        logger.debug(
             f"Testing {self.device_name} - Channels {start_channel} to {start_channel + num_channels - 1}"
         )
 
@@ -31,11 +31,11 @@ class TestDMX(BaseDMX):
         for i in range(num_channels):
             channel = start_channel + i
             try:
-                logger.info(f"  Channel {channel}: ON (255)")
+                logger.debug(f"  Channel {channel}: ON (255)")
                 self._send(channel, 255)
                 time.sleep(0.5)
 
-                logger.info(f"  Channel {channel}: OFF (0)")
+                logger.debug(f"  Channel {channel}: OFF (0)")
                 self._send(channel, 0)
                 time.sleep(0.2)
 
@@ -44,7 +44,7 @@ class TestDMX(BaseDMX):
 
     def test_fade(self, channel: int = 1):
         """Test fading on a specific channel"""
-        logger.info(f"Testing {self.device_name} - Fade on channel {channel}")
+        logger.debug(f"Testing {self.device_name} - Fade on channel {channel}")
 
         # Fade up
         for value in range(0, 256, 10):
@@ -58,18 +58,18 @@ class TestDMX(BaseDMX):
 
     def reset_all(self):
         """Reset all channels to 0"""
-        logger.info(f"Resetting all channels for {self.device_name}")
+        logger.debug(f"Resetting all channels for {self.device_name}")
         for channel in range(1, 513):
             self._send(channel, 0)
 
 
 def test_single_device():
     """Test a single uDMX device"""
-    logger.info("=== Testing Single uDMX Device ===")
+    logger.debug("=== Testing Single uDMX Device ===")
 
     try:
         with TestDMX("Primary Device") as device:
-            logger.info("✓ Device opened successfully")
+            logger.debug("✓ Device opened successfully")
 
             # Test basic channels
             device.test_channels(1, 5)
@@ -80,7 +80,7 @@ def test_single_device():
             # Reset all channels
             device.reset_all()
 
-            logger.info("✓ Single device test completed")
+            logger.debug("✓ Single device test completed")
             return True
 
     except Exception as e:
@@ -90,7 +90,7 @@ def test_single_device():
 
 def test_two_devices():
     """Test two uDMX devices with different channel assignments"""
-    logger.info("=== Testing Two uDMX Devices ===")
+    logger.debug("=== Testing Two uDMX Devices ===")
 
     try:
         # Note: This assumes you can distinguish devices somehow
@@ -99,18 +99,18 @@ def test_two_devices():
         device1 = TestDMX("Device 1")
         device2 = TestDMX("Device 2")
 
-        logger.info("Testing Device 1...")
+        logger.debug("Testing Device 1...")
         device1.test_channels(1, 3)  # Test channels 1-3
         device1.reset_all()
 
         time.sleep(1)
 
-        logger.info("Testing Device 2...")
+        logger.debug("Testing Device 2...")
         device2.test_channels(4, 3)  # Test channels 4-6
         device2.reset_all()
 
         # Test both devices simultaneously
-        logger.info("Testing both devices simultaneously...")
+        logger.debug("Testing both devices simultaneously...")
         device1._send(1, 255)  # Device 1, channel 1
         device2._send(4, 255)  # Device 2, channel 4
         time.sleep(2)
@@ -121,7 +121,7 @@ def test_two_devices():
         device1._dev.close()
         device2._dev.close()
 
-        logger.info("✓ Two device test completed")
+        logger.debug("✓ Two device test completed")
         return True
 
     except Exception as e:
@@ -131,18 +131,18 @@ def test_two_devices():
 
 def interactive_device_test():
     """Interactive test for manual device control"""
-    logger.info("=== Interactive Device Test ===")
+    logger.debug("=== Interactive Device Test ===")
 
     try:
         device = TestDMX("Interactive Device")
-        logger.info("Device ready for interactive testing")
+        logger.debug("Device ready for interactive testing")
 
-        logger.info("Commands:")
-        logger.info("  set <channel> <value>  - Set channel to value (1-512, 0-255)")
-        logger.info("  test <channel>         - Test specific channel")
-        logger.info("  fade <channel>         - Fade test on channel")
-        logger.info("  reset                  - Reset all channels")
-        logger.info("  quit                   - Exit")
+        logger.debug("Commands:")
+        logger.debug("  set <channel> <value>  - Set channel to value (1-512, 0-255)")
+        logger.debug("  test <channel>         - Test specific channel")
+        logger.debug("  fade <channel>         - Fade test on channel")
+        logger.debug("  reset                  - Reset all channels")
+        logger.debug("  quit                   - Exit")
 
         while True:
             try:
@@ -159,7 +159,7 @@ def interactive_device_test():
                         value = int(parts[2])
                         if 1 <= channel <= 512 and 0 <= value <= 255:
                             device._send(channel, value)
-                            logger.info(f"✓ Channel {channel} set to {value}")
+                            logger.debug(f"✓ Channel {channel} set to {value}")
                         else:
                             logger.error("Channel must be 1-512, value must be 0-255")
                     else:
@@ -187,7 +187,7 @@ def interactive_device_test():
                 logger.error(f"Error: {e}")
 
         device._dev.close()
-        logger.info("Device closed")
+        logger.debug("Device closed")
 
     except Exception as e:
         logger.error(f"Interactive test failed: {e}")
@@ -195,20 +195,20 @@ def interactive_device_test():
 
 def main():
     """Main test function"""
-    logger.info("=== BaseDMX Device Test Suite ===")
+    logger.debug("=== BaseDMX Device Test Suite ===")
 
     # Test single device
-    logger.info("\n1. Testing single device...")
+    logger.debug("\n1. Testing single device...")
     single_success = test_single_device()
 
     # Test two devices (if available)
-    logger.info("\n2. Testing two devices...")
+    logger.debug("\n2. Testing two devices...")
     dual_success = test_two_devices()
 
     # Summary
-    logger.info("\n=== Test Summary ===")
-    logger.info(f"Single device test: {'✓ PASSED' if single_success else '✗ FAILED'}")
-    logger.info(f"Dual device test: {'✓ PASSED' if dual_success else '✗ FAILED'}")
+    logger.debug("\n=== Test Summary ===")
+    logger.debug(f"Single device test: {'✓ PASSED' if single_success else '✗ FAILED'}")
+    logger.debug(f"Dual device test: {'✓ PASSED' if dual_success else '✗ FAILED'}")
 
     # Interactive test option
     if single_success:
@@ -223,7 +223,7 @@ def main():
         except KeyboardInterrupt:
             pass
 
-    logger.info("\n=== Test Complete ===")
+    logger.debug("\n=== Test Complete ===")
 
 
 if __name__ == "__main__":
