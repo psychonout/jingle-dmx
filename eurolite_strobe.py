@@ -1,5 +1,6 @@
-from base_dmx import BaseDMX
 from loguru import logger
+
+from base_dmx import BaseDMX
 
 
 class EuroliteStrobe(BaseDMX):

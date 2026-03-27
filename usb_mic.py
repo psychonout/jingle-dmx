@@ -12,20 +12,88 @@ try:
     # extension is being used. Use a private name to avoid adding to
     # module globals unintentionally.
     import audio_core as _audio_core
+
     fast_rms_peak = _audio_core.fast_rms_peak
     try:
-        logger.debug(f"Using C-extension audio_core.fast_rms_peak from {_audio_core.__file__}")
+        logger.debug(
+            f"Using C-extension audio_core.fast_rms_peak from {_audio_core.__file__}"
+        )
     except Exception:
         # Fallback if module attribute isn't available for some reason
         logger.debug("Using C-extension audio_core.fast_rms_peak")
 except ImportError:  # pragma: no cover - fallback if extension not built
     fast_rms_peak = None
-    logger.debug("audio_core C-extension not available, using NumPy fallback for RMS/peak calculations")
+    logger.debug(
+        "audio_core C-extension not available, using NumPy fallback for RMS/peak calculations"
+    )
 
 MIC_RATE = 44100
 # Default buffer size in milliseconds (approx 16.7ms)
 DEFAULT_BUFFER_MS = 16
 FRAMES_PER_BUFFER = int(MIC_RATE * DEFAULT_BUFFER_MS / 1000)
+
+
+class MusicPatternDetector:
+    """Lightweight music pattern tracker for beat/bar/phrase phase hints.
+
+    The detector is intentionally heuristic and low-cost so it can run in the
+    main control loop without adding noticeable latency.
+    """
+
+    def __init__(self, effect_variations: int = 1):
+        self.effect_variations = max(1, int(effect_variations))
+        self.beat_index = 0
+        self._last_beat_time = 0.0
+        self._last_energy = 0.0
+        self._energy_ema = 0.0
+        self._confidence = 0.0
+
+    def update(
+        self,
+        *,
+        rms: float,
+        beat_detected: bool,
+        bass_energy: float,
+        mid_energy: float,
+        high_energy: float,
+    ) -> dict[str, Any]:
+        now = time.time()
+        total_energy = max(0.0, float(bass_energy + mid_energy + high_energy))
+
+        # Smooth energy baseline for simple build/drop detection.
+        if self._energy_ema <= 0.0:
+            self._energy_ema = total_energy
+        else:
+            self._energy_ema = (0.85 * self._energy_ema) + (0.15 * total_energy)
+
+        building_energy = total_energy > (self._energy_ema * 1.15)
+        energy_drop = total_energy < (self._energy_ema * 0.75)
+
+        if beat_detected:
+            self.beat_index += 1
+            self._last_beat_time = now
+
+        # Soft confidence from beat recency and energy dynamics.
+        beat_recent = (now - self._last_beat_time) < 0.6
+        target = 1.0 if (beat_recent and (building_energy or rms > 0)) else 0.0
+        self._confidence = (0.8 * self._confidence) + (0.2 * target)
+
+        on_bar = beat_detected and (self.beat_index % 4 == 0)
+        phrase_len = max(8, self.effect_variations * 4)
+        on_phrase = beat_detected and (self.beat_index % phrase_len == 0)
+        pattern_detected = beat_recent and (self._confidence >= 0.25)
+
+        self._last_energy = total_energy
+
+        return {
+            "on_bar": on_bar,
+            "on_phrase": on_phrase,
+            "building_energy": building_energy,
+            "energy_drop": energy_drop,
+            "pattern_detected": pattern_detected,
+            "pattern_confidence": max(0.0, min(1.0, self._confidence)),
+            "beat_index": self.beat_index,
+        }
 
 
 def list_usb_microphones():
@@ -53,7 +121,11 @@ def list_usb_microphones():
     return usb_devices
 
 
-def get_usb_microphone(device_name: str | None = None, device_index: int | None = None, frames_per_buffer: int | None = None):
+def get_usb_microphone(
+    device_name: str | None = None,
+    device_index: int | None = None,
+    frames_per_buffer: int | None = None,
+):
     """Get a USB microphone by name or index"""
     p = pyaudio.PyAudio()
 
@@ -88,7 +160,9 @@ def get_usb_microphone(device_name: str | None = None, device_index: int | None 
             device_index = device_info["index"]
             logger.debug(f"Using default device: {device_info['name']}")
         except OSError:
-            logger.warning("No default input device found. Searching for any available input device...")
+            logger.warning(
+                "No default input device found. Searching for any available input device..."
+            )
             # Fallback: find the first device with input channels
             device_index = None
             for i in range(p.get_device_count()):
@@ -97,7 +171,9 @@ def get_usb_microphone(device_name: str | None = None, device_index: int | None 
                     if info["maxInputChannels"] > 0:
                         device_index = i
                         device_info = info
-                        logger.info(f"Fallback: Found input device '{info['name']}' at index {i}")
+                        logger.info(
+                            f"Fallback: Found input device '{info['name']}' at index {i}"
+                        )
                         break
                 except Exception:
                     continue
@@ -116,7 +192,11 @@ def get_usb_microphone(device_name: str | None = None, device_index: int | None 
             else MIC_RATE,
             input=True,
             input_device_index=device_index,
-            frames_per_buffer=(frames_per_buffer if frames_per_buffer is not None else FRAMES_PER_BUFFER),
+            frames_per_buffer=(
+                frames_per_buffer
+                if frames_per_buffer is not None
+                else FRAMES_PER_BUFFER
+            ),
         )
         return stream, p
     except Exception as e:
@@ -125,7 +205,12 @@ def get_usb_microphone(device_name: str | None = None, device_index: int | None 
         return None, None
 
 
-def read_usb_microphone(stream: Any, sample_rate: int = MIC_RATE, smoothing_factor: float = 0.85, frames_per_buffer: int = FRAMES_PER_BUFFER):
+def read_usb_microphone(
+    stream: Any,
+    sample_rate: int = MIC_RATE,
+    smoothing_factor: float = 0.85,
+    frames_per_buffer: int = FRAMES_PER_BUFFER,
+):
     """Read audio data from USB microphone and return enhanced volume level"""
     overflows = 0
     prev_ovf_time = time.time()
@@ -164,7 +249,7 @@ def read_usb_microphone(stream: Any, sample_rate: int = MIC_RATE, smoothing_fact
         else:
             smoothing_factor = smoothing_factor  # Adjust for more/less smoothing
             read_usb_microphone._last_volume = (
-                    smoothing_factor * read_usb_microphone._last_volume
+                smoothing_factor * read_usb_microphone._last_volume
                 + (1 - smoothing_factor) * dynamic_volume
             )
 
@@ -255,7 +340,9 @@ class USBMicrophone:
 
         # smoothing factor controls how responsive the volume is to changes
         # (higher values = more smoothing, less responsiveness)
-        self.smoothing_factor = smoothing_factor if smoothing_factor is not None else 0.85
+        self.smoothing_factor = (
+            smoothing_factor if smoothing_factor is not None else 0.85
+        )
 
         # Audio analysis data (only initialized if enhanced features are enabled)
         if self.enable_frequency_analysis or self.enable_beat_detection:
@@ -341,7 +428,10 @@ class USBMicrophone:
                 try:
                     available = self.stream.get_read_available()
                     if available > self.frames_per_buffer * 2:
-                        self.stream.read(available - self.frames_per_buffer, exception_on_overflow=False)
+                        self.stream.read(
+                            available - self.frames_per_buffer,
+                            exception_on_overflow=False,
+                        )
                 except Exception:
                     pass
 
@@ -373,7 +463,7 @@ class USBMicrophone:
                             self.smoothing_factor * self._smooothed_volume
                             + (1 - self.smoothing_factor) * volume
                         )
-                    
+
                     # Update pending metrics (accumulate max values since last read)
                     # This ensures we don't miss peaks if the main loop is slower than the reader
                     if self._pending_metrics is None:
@@ -387,8 +477,12 @@ class USBMicrophone:
                         # For volume, keep latest as it is smoothed
                         self._pending_metrics["volume"] = self._smooothed_volume
                         # For RMS and Peak, keep the maximum seen
-                        self._pending_metrics["rms"] = max(self._pending_metrics["rms"], rms)
-                        self._pending_metrics["peak"] = max(self._pending_metrics["peak"], peak)
+                        self._pending_metrics["rms"] = max(
+                            self._pending_metrics["rms"], rms
+                        )
+                        self._pending_metrics["peak"] = max(
+                            self._pending_metrics["peak"], peak
+                        )
                         self._pending_metrics["timestamp"] = time.time()
 
                     self._latest_metrics = {
@@ -412,8 +506,13 @@ class USBMicrophone:
                             len(self.reader_rms_history) >= 4
                             and (now - self.reader_last_beat_time) > 0.08
                         ):
-                            avg_rms = sum(self.reader_rms_history[:-1]) / max(1, len(self.reader_rms_history)-1)
-                            if rms > avg_rms * self.reader_threshold_ratio and avg_rms > 10:
+                            avg_rms = sum(self.reader_rms_history[:-1]) / max(
+                                1, len(self.reader_rms_history) - 1
+                            )
+                            if (
+                                rms > avg_rms * self.reader_threshold_ratio
+                                and avg_rms > 10
+                            ):
                                 self.beat_detected = True
                                 self.reader_last_beat_time = now
                     except Exception as e:
@@ -583,14 +682,20 @@ class USBMicrophone:
         # For backwards compatibility, if no reader thread is enabled, use
         # a blocking read as before.
         if not (self.enable_frequency_analysis or self.enable_beat_detection):
-            return read_usb_microphone(self.stream, smoothing_factor=self.smoothing_factor, frames_per_buffer=self.frames_per_buffer)
+            return read_usb_microphone(
+                self.stream,
+                smoothing_factor=self.smoothing_factor,
+                frames_per_buffer=self.frames_per_buffer,
+            )
 
         # Enhanced reading with comprehensive analysis
         try:
             # Anti-lag: skip old data
             available = self.stream.get_read_available()
             if available > self.frames_per_buffer * 2:
-                self.stream.read(available - self.frames_per_buffer, exception_on_overflow=False)
+                self.stream.read(
+                    available - self.frames_per_buffer, exception_on_overflow=False
+                )
 
             # Read audio data
             audio_data = self.stream.read(
@@ -740,14 +845,24 @@ def detect_beat(current_volume, cooldown_time=0.2):
     return False
 
 
-def read_usb_microphone_with_beat_detection(stream: Any, sample_rate: int = MIC_RATE, smoothing_factor: float = 0.85, frames_per_buffer: int = FRAMES_PER_BUFFER):
+def read_usb_microphone_with_beat_detection(
+    stream: Any,
+    sample_rate: int = MIC_RATE,
+    smoothing_factor: float = 0.85,
+    frames_per_buffer: int = FRAMES_PER_BUFFER,
+):
     """
     Enhanced microphone reading with beat detection.
 
     Returns:
         tuple: (volume, beat_detected)
     """
-    volume = read_usb_microphone(stream, sample_rate, smoothing_factor=smoothing_factor, frames_per_buffer=frames_per_buffer)
+    volume = read_usb_microphone(
+        stream,
+        sample_rate,
+        smoothing_factor=smoothing_factor,
+        frames_per_buffer=frames_per_buffer,
+    )
     beat = detect_beat(volume)
     return volume, beat
 

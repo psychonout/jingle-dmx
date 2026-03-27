@@ -50,8 +50,9 @@ Mapping based on manual (pages 21-22):
     128-255: pattern chase, slow → fast
 """
 
-from base_dmx import BaseDMX
 import random
+
+from base_dmx import BaseDMX
 
 
 def _clamp(value: int, min_value: int = 0, max_value: int = 255) -> int:
@@ -271,11 +272,15 @@ class StingerII(BaseDMX):
 
         # CH6 – Laser on/off and color selection
         # If strobe_speed and rotation are both 0, turn laser off completely
-        if strobe_speed <= 0 and (rotation_raw is None or rotation_raw <= 0) and chase_speed is None:
+        if (
+            strobe_speed <= 0
+            and (rotation_raw is None or rotation_raw <= 0)
+            and chase_speed is None
+        ):
             laser_mode_val = 0  # Blackout
         else:
-            # Laser on - use both red and green
-            laser_mode_val = 110  # Red and Green Lasers (90-129 range)
+            # Laser on - use RED LASER ONLY
+            laser_mode_val = 30  # Red Laser Only (10-49 range)
 
         self._send(self._ch(6), laser_mode_val)
 
@@ -305,7 +310,9 @@ class StingerII(BaseDMX):
         self.laser_rotation = value
         self._send(self._ch(9), value)
 
-    def set_moonflower_rotation(self, direction: str = "cw", *, speed: int = 127) -> None:
+    def set_moonflower_rotation(
+        self, direction: str = "cw", *, speed: int = 127
+    ) -> None:
         """Set moonflower rotation via CH8.
 
         - ``direction="stop"`` → no rotation region (0‑9).

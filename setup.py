@@ -7,7 +7,6 @@ except ImportError:
 
 import numpy as np
 
-
 packages = find_packages(include=["jingle_dmx"])
 
 extensions = [

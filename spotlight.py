@@ -212,6 +212,7 @@ class Spotlight(BaseDMX):
 
         # Generate a slowly changing color
         import math
+
         r = int(127 + 127 * math.sin(t))
         g = int(127 + 127 * math.sin(t + 2.0))
         b = int(127 + 127 * math.sin(t + 4.0))

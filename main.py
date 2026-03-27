@@ -127,16 +127,23 @@ def main() -> None:
     logger.debug("Starting main application...")
     try:
         import argparse
+
         parser = argparse.ArgumentParser()
         parser.add_argument("--profile", action="store_true", help="Run with cProfile")
-        parser.add_argument("--profile-file", default="jingle_dmx.prof", help="Output file for profile data")
+        parser.add_argument(
+            "--profile-file",
+            default="jingle_dmx.prof",
+            help="Output file for profile data",
+        )
         args = parser.parse_args()
 
         if args.profile:
             import cProfile
             import pstats
 
-            logger.info(f"Profiling enabled. Output will be saved to {args.profile_file}")
+            logger.info(
+                f"Profiling enabled. Output will be saved to {args.profile_file}"
+            )
             profiler = cProfile.Profile()
             profiler.enable()
 

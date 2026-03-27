@@ -14,3 +14,11 @@ class AudioFrame:
     high_energy: float
     total_energy: float
 
+    # Music pattern detection state (optional).
+    on_bar: bool = False
+    on_phrase: bool = False
+    building_energy: bool = False
+    energy_drop: bool = False
+    pattern_detected: bool = False
+    pattern_confidence: float = 0.0
+    beat_index: int = 0

@@ -1,7 +1,7 @@
+import atexit
 import sys
 import threading
 import time
-import atexit
 
 from loguru import logger
 from pyudmx.pyudmx import uDMXDevice
@@ -16,6 +16,7 @@ class DMXUniverse:
     This prevents multiple devices from fighting over the USB connection and
     allows for efficient batched updates.
     """
+
     _instance = None
     _lock = threading.Lock()
 

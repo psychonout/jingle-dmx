@@ -2,21 +2,19 @@ import os
 import time
 from typing import Dict, Optional
 
-import random
-
 from loguru import logger
 
 from audio_model import AudioFrame
 from config import DeviceConfig, ShowProfile, load_default_profile
-from effect_engine import Devices, EffectEngine, Thresholds
 from dynamic_thresholds import AdaptiveThresholds
+from effect_engine import Devices, EffectEngine, Thresholds
+from eurolite_strobe import EuroliteStrobe
 from laser import Laser
 from light_strip import VUMeter
 from spotlight import Spotlight
 from stinger import StingerII
 from strobe import Strobe
-from usb_mic import USBMicrophone
-from eurolite_strobe import EuroliteStrobe
+from usb_mic import MusicPatternDetector, USBMicrophone
 
 
 class LightShowController:
@@ -61,6 +59,9 @@ class LightShowController:
 
         # Centralized effect engine.
         self.effect_engine = EffectEngine(self.profile)
+        self.pattern_detector = MusicPatternDetector(
+            effect_variations=self.effect_engine.get_effect_variation_count()
+        )
 
     # --- device lifecycle -------------------------------------------------
 
@@ -210,7 +211,9 @@ class LightShowController:
 
         while True:
             current_time = time.time()
-            min_thresh, strobe_thresh, combo_thresh = self.threshold_system.get_thresholds()
+            min_thresh, strobe_thresh, combo_thresh = (
+                self.threshold_system.get_thresholds()
+            )
             audio_data = usb_mic.read()
 
             rms = audio_data["rms"]
@@ -218,7 +221,9 @@ class LightShowController:
             beat_detected = audio_data["beat_detected"]
 
             if rms < self.silence_threshold:
-                self._silence_until = max(self._silence_until, current_time + self.silence_hold_seconds)
+                self._silence_until = max(
+                    self._silence_until, current_time + self.silence_hold_seconds
+                )
 
             if current_time < self._silence_until:
                 rms = 0
@@ -235,7 +240,20 @@ class LightShowController:
 
             # Use the microphone read timestamp if available to measure true
             # end-to-end latency. Fall back to current loop time otherwise.
-            frame_timestamp = audio_data.get("timestamp", current_time) if isinstance(audio_data, dict) else current_time
+            frame_timestamp = (
+                audio_data.get("timestamp", current_time)
+                if isinstance(audio_data, dict)
+                else current_time
+            )
+
+            pattern_state = self.pattern_detector.update(
+                rms=rms,
+                beat_detected=beat_detected,
+                bass_energy=bass_energy,
+                mid_energy=mid_energy,
+                high_energy=high_energy,
+            )
+
             frame = AudioFrame(
                 timestamp=frame_timestamp,
                 rms=rms,
@@ -245,6 +263,13 @@ class LightShowController:
                 mid_energy=mid_energy,
                 high_energy=high_energy,
                 total_energy=total_energy,
+                on_bar=pattern_state["on_bar"],
+                on_phrase=pattern_state["on_phrase"],
+                building_energy=pattern_state["building_energy"],
+                energy_drop=pattern_state["energy_drop"],
+                pattern_detected=pattern_state["pattern_detected"],
+                pattern_confidence=pattern_state["pattern_confidence"],
+                beat_index=pattern_state["beat_index"],
             )
 
             if int(current_time * 10) % 3 == 0:
@@ -289,7 +314,8 @@ class LightShowController:
                 msg = (
                     f"Audio Analysis - RMS: {frame.rms:.1f}, Peak: {frame.peak:.1f} | "
                     f"Thresholds - Min: {min_threshold:.1f}, Strobe: {strobe_threshold:.1f}, "
-                    f"Combo: {combo_threshold:.1f}"
+                    f"Combo: {combo_threshold:.1f} | Pattern: {frame.pattern_detected} "
+                    f"({frame.pattern_confidence:.2f})"
                 )
                 logger.debug(msg)
 
