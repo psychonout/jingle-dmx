@@ -5,7 +5,7 @@ from typing import Optional
 
 @dataclass
 class DeviceConfig:
-    use_laser: bool = False
+    use_laser: bool = True
     use_strobe: bool = True
     use_spotlight: bool = True
     use_stinger: bool = True

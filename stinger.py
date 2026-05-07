@@ -54,6 +54,8 @@ import random
 
 from base_dmx import BaseDMX
 
+_MOONFLOWER_SPEED_SCALE = 0.6
+
 
 def _clamp(value: int, min_value: int = 0, max_value: int = 255) -> int:
     return max(min_value, min(max_value, int(value)))
@@ -322,6 +324,8 @@ class StingerII(BaseDMX):
 
         direction = (direction or "cw").lower()
         speed = _clamp(speed, 0, 127)
+        # Keep moonflower movement calmer across all scenes.
+        speed = int(speed * _MOONFLOWER_SPEED_SCALE)
 
         if direction in {"stop", "none", "off"}:
             value = 0

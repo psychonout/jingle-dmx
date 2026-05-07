@@ -10,35 +10,35 @@ class Spotlight(BaseDMX):
         self.current_color = (0, 0, 0, 0)  # R, G, B, W
         self.current_brightness = 0
 
-    def set_brightness(self, value: int | None = None) -> None:
+    def set_brightness(self, value: int) -> None:
         """Set the brightness of the spotlight."""
         self._send(0, value)
 
-    def set_red(self, value: int | None = None) -> None:
+    def set_red(self, value: int) -> None:
         """Set the red color channel."""
         self._send(1, value)
 
-    def set_green(self, value: int | None = None) -> None:
+    def set_green(self, value: int) -> None:
         """Set the green color channel."""
         self._send(2, value)
 
-    def set_blue(self, value: int | None = None) -> None:
+    def set_blue(self, value: int) -> None:
         """Set the blue color channel."""
         self._send(3, value)
 
-    def set_white(self, value: int | None = None) -> None:
+    def set_white(self, value: int) -> None:
         """Set the white color channel."""
         self._send(4, value)
 
-    def set_strobe(self, value: int | None = None) -> None:
+    def set_strobe(self, value: int) -> None:
         """Set the strobe effect."""
         self._send(5, value)
 
-    def set_macro(self, value: int | None = None) -> None:
+    def set_macro(self, value: int) -> None:
         """Set the macro effect."""
         self._send(6, value)
 
-    def set_macro_speed(self, value: int | None = None) -> None:
+    def set_macro_speed(self, value: int) -> None:
         """Set the speed of the macro effect."""
         self._send(7, value)
 

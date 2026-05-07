@@ -93,7 +93,7 @@ def run_controller() -> None:
     # Note: DeviceConfig is now imported from config.py
     # We can eventually move this hardcoded config to config.py or env vars as well
     config = DeviceConfig(
-        use_laser=False,
+        use_laser=True,
         use_strobe=True,
         use_spotlight=False,
         use_stinger=True,

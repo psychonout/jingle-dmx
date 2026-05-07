@@ -1,3 +1,4 @@
+import math
 import os
 import time
 from typing import Dict, Optional
@@ -9,7 +10,12 @@ from config import DeviceConfig, ShowProfile, load_default_profile
 from dynamic_thresholds import AdaptiveThresholds
 from effect_engine import Devices, EffectEngine, Thresholds
 from eurolite_strobe import EuroliteStrobe
-from laser import Laser
+from laser import (
+    MONO_BLUE_MAX,
+    MONO_GREEN_MAX,
+    MONO_RED_MAX,
+    Laser,
+)
 from light_strip import VUMeter
 from spotlight import Spotlight
 from stinger import StingerII
@@ -18,6 +24,21 @@ from usb_mic import MusicPatternDetector, USBMicrophone
 
 
 class LightShowController:
+    # Normalized closed polyline used for star tracing mode.
+    _STAR_POINTS = [
+        (0.00, 1.00),
+        (0.22, 0.30),
+        (0.95, 0.30),
+        (0.36, -0.12),
+        (0.58, -0.90),
+        (0.00, -0.40),
+        (-0.58, -0.90),
+        (-0.36, -0.12),
+        (-0.95, 0.30),
+        (-0.22, 0.30),
+        (0.00, 1.00),
+    ]
+
     def __init__(
         self,
         device_config: Optional[DeviceConfig] = None,
@@ -54,6 +75,27 @@ class LightShowController:
         # This prevents rapid retriggers from near-silence noise.
         self.silence_hold_seconds = float(os.getenv("SILENCE_HOLD_SECONDS", "0.5"))
         self._silence_until = 0.0
+        # Keep a small amount of laser motion memory so position changes
+        # remain smooth but can still jump on strong musical events.
+        self._laser_h_pos = 63.0
+        self._laser_v_pos = 63.0
+        self._laser_kick_h = 0.0
+        self._laser_kick_v = 0.0
+        self._laser_shape_phase = 0.0
+        self._laser_last_update_time = 0.0
+        self._laser_last_beat = False
+        self.laser_novelty_shape = os.getenv(
+            "LASER_NOVELTY_SHAPE", "false"
+        ).lower() in ("1", "true", "yes")
+        # LASER_SHAPE selects the live-show laser mode.
+        # "circle"  → circle preset locked, max angle speeds, position from music (default)
+        # "novelty" → trace a star outline (same as LASER_NOVELTY_SHAPE=true)
+        # "random"  → original audio-reactive pattern churn
+        self.laser_shape = os.getenv("LASER_SHAPE", "circle")
+        # Fixture calibration for circle mode. Many units are mechanically
+        # biased upward when v_angle is near 0, so expose a downward bias.
+        self.laser_circle_v_angle = int(os.getenv("LASER_CIRCLE_V_ANGLE", "64"))
+        self.laser_circle_v_center = float(os.getenv("LASER_CIRCLE_V_CENTER", "82"))
 
         self.devices: Dict[str, object] = {}
 
@@ -167,6 +209,260 @@ class LightShowController:
 
     # --- loop helpers -----------------------------------------------------
 
+    def _update_laser(
+        self, laser: Laser, frame: AudioFrame, current_time: float
+    ) -> None:
+        """Map audio features to laser parameters for dynamic visualization.
+
+        Creates a responsive laser show that:
+        - Reacts strongly to beats and energy drops
+        - Morphs patterns based on audio energy
+        - Maintains minimal activity during silence to keep hardware healthy
+        """
+        if not laser:
+            return
+
+        # --- Determine intensity state from audio features ---
+
+        is_silent = frame.rms <= 0
+        is_loud = (
+            frame.rms > self.threshold_system.get_thresholds()[2]
+        )  # combo threshold
+        is_building = frame.building_energy
+        is_drop = frame.energy_drop
+        is_beat = frame.beat_detected
+        is_phrase = frame.on_phrase
+
+        # Silence gate: keep laser fully off until sound returns.
+        if is_silent:
+            laser.set_mode("off")
+            laser.set_mode_level(0)
+            return
+
+        # --- Base pattern and color selection ---
+
+        # Pattern: tie to beat position for rhythmic coherence, with energy influence.
+        if self.laser_novelty_shape:
+            base_pattern = 8
+            pattern_speed = 192
+        elif is_drop:
+            # High energy drop: rapid chaotic patterns (128-255 = dots/strips for drama)
+            base_pattern = 160 + (frame.beat_index % 4) * 20
+            pattern_speed = 255
+        elif is_loud:
+            # Loud section: energetic patterns (dots/lines 0-127 with variety)
+            base_pattern = (frame.beat_index * 16) % 128
+            pattern_speed = 220
+        elif is_building:
+            # Building energy: gradually shift from simple to complex
+            base_pattern = 40 + int(frame.bass_energy * 2) % 60
+            pattern_speed = 200
+        elif is_beat:
+            # Regular beat: moderate pattern with beat-synced variety
+            base_pattern = (frame.beat_index * 32) % 96
+            pattern_speed = 210
+        else:
+            # Idle/quiet: gentle morphing pattern to keep hardware healthy
+            # Cycle slowly through low-number patterns (simpler = less jarring)
+            base_pattern = int(current_time * 2) % 32
+            pattern_speed = 192  # Minimum for speed range
+
+        # Color: map energy to colour — uses RGB segments (R 0-20, G 21-41, B 42-63)
+        # and colour-mixing (64-127) / auto-cycle (128-192) ranges.
+        # Colour only takes effect in auto/sound modes.
+        if self.laser_novelty_shape:
+            color_val = 12
+        elif is_drop:
+            # Drops: cycle through RGB segments for maximum colour variety
+            beat_colors = [20, 41, 63, 10, 35, 55]
+            color_val = beat_colors[frame.beat_index % len(beat_colors)]
+        elif is_loud:
+            # Loud sections: colour mixing range for blended colours
+            color_val = 64 + (frame.beat_index * 8) % 64
+        elif is_beat:
+            # Beats: rotate through R, G, B segments with beat sync
+            segment = frame.beat_index % 3
+            if segment == 0:
+                color_val = 10 + (frame.beat_index % 11)  # Red segment
+            elif segment == 1:
+                color_val = 21 + (frame.beat_index % 21)  # Green segment
+            else:
+                color_val = 42 + (frame.beat_index % 22)  # Blue segment
+        elif is_building:
+            # Building: transition from cool (blue) to warm (red)
+            progress = min(1.0, frame.rms / max(1.0, self.silence_threshold * 3.0))
+            if progress < 0.5:
+                # Blue (42-63) → Green (21-41)
+                color_val = MONO_BLUE_MAX - int(
+                    progress * 2 * (MONO_BLUE_MAX - MONO_GREEN_MAX)
+                )
+            else:
+                # Green (21-41) → Red (10-20) — use bright red only
+                color_val = MONO_GREEN_MAX - int(
+                    (progress - 0.5) * 2 * (MONO_GREEN_MAX - MONO_RED_MAX)
+                )
+                color_val = max(10, min(MONO_RED_MAX, color_val))
+        else:
+            # Idle: slow drift through all three RGB segments
+            cycle = int(current_time * 2) % 64
+            color_val = cycle
+
+        # --- Mode level (intensity) ---
+        # In auto mode, mode_level selects one of 4 auto programs:
+        #   0, 64, 128, 192. We use 128 (auto program 1) as the base
+        # and nudge it on beats for variety.
+
+        if is_drop:
+            # Full intensity on energy drops — sound mode for max reactivity
+            mode_level = 192
+        elif is_loud:
+            # High intensity for loud sections
+            mode_level = 192
+        elif is_building:
+            # Growing intensity — auto program 1
+            mode_level = 128
+        elif is_beat:
+            # Pulse on beat — alternate between auto programs
+            mode_level = 128 if frame.beat_index % 2 == 0 else 192
+        elif is_silent:
+            # Minimal but non-zero to keep hardware healthy
+            mode_level = 128
+        else:
+            # Low but visible ambient activity
+            mode_level = 128
+
+        # --- Apply to laser device ---
+
+        laser.set_mode("auto")
+
+        if self.laser_shape == "circle":
+            # Circle orbit mode: preset is locked, audio only drives position.
+            # Nudge mode_level by 2 on beats for a subtle brightness pulse.
+            circle_level = 8 + (2 if (is_beat or is_drop) else 0)
+            laser.set_mode_level(circle_level)
+            # Slow colour drift through RGB segments so it doesn't stay one flat hue.
+            # Colour only works in auto/sound modes.
+            color_cycle = int(current_time * 1.5) % 64
+            laser.color(color_cycle)
+            # Spin the circle but leave CH4/CH5 at fixed angle (0) so the
+            # hardware flip doesn't bias motion toward the upper half.
+            laser.rotation_speed(255)
+            laser.horizontal_angle(0)
+            laser.vertical_angle(self.laser_circle_v_angle)
+            laser.size(18)
+
+            # Audio-reactive orbit: slow sin/cos base orbit, beat kicks jump it.
+            energy_norm = (
+                0.0
+                if is_silent
+                else min(1.0, frame.rms / max(1.0, self.silence_threshold * 3.0))
+            )
+            spread = 14 + int(42 * energy_norm)
+            if is_drop or is_beat:
+                kick_mag = 22 + int(22 * energy_norm)
+                kick_phase = current_time * 5.0 + (frame.beat_index * 0.9)
+                self._laser_kick_h = math.sin(kick_phase) * kick_mag
+                self._laser_kick_v = math.cos(kick_phase * 0.93) * kick_mag
+            self._laser_kick_h *= 0.86
+            self._laser_kick_v *= 0.86
+            desired_h = int(
+                63
+                + math.sin(current_time * (0.9 + energy_norm * 2.0)) * spread
+                + self._laser_kick_h
+            )
+            desired_v = int(
+                self.laser_circle_v_center
+                + math.cos(current_time * (0.75 + energy_norm * 1.8)) * spread
+                + self._laser_kick_v
+            )
+            blend = 0.09 if is_silent else (0.48 if (is_drop or is_beat) else 0.24)
+            self._laser_last_beat = is_beat
+
+        else:
+            # Original modes: pattern/color churn + optional star trace.
+            laser.pattern(base_pattern)
+            laser.color(color_val)
+            laser.set_mode_level(mode_level)
+
+            if self.laser_novelty_shape:
+                # Trace the configured outline; audio controls traversal speed and scale.
+                dt = (
+                    self.effect_interval
+                    if self._laser_last_update_time <= 0
+                    else max(
+                        0.001, min(0.2, current_time - self._laser_last_update_time)
+                    )
+                )
+                self._laser_last_update_time = current_time
+                energy_norm = (
+                    0.0
+                    if is_silent
+                    else min(1.0, frame.rms / max(1.0, self.silence_threshold * 3.0))
+                )
+                trace_rate = 1.5 + (energy_norm * 4.0)
+                if (is_beat and not self._laser_last_beat) or is_drop:
+                    trace_rate += 3.0
+                self._laser_last_beat = is_beat
+                self._laser_shape_phase += trace_rate * dt
+
+                point_count = len(self._STAR_POINTS)
+                base_index = int(self._laser_shape_phase) % point_count
+                next_index = (base_index + 1) % point_count
+                frac = self._laser_shape_phase - int(self._laser_shape_phase)
+
+                x0, y0 = self._STAR_POINTS[base_index]
+                x1, y1 = self._STAR_POINTS[next_index]
+                x = x0 + (x1 - x0) * frac
+                y = y0 + (y1 - y0) * frac
+
+                scale = 26 + int(20 * energy_norm)
+                desired_h = 63 + int(x * scale)
+                desired_v = 63 - int(y * scale)
+                blend = 0.28 if is_silent else (0.42 if (is_beat or is_drop) else 0.32)
+            else:
+                # Symmetric center-orbit with audio-scaled spread.
+                energy_norm = (
+                    0.0
+                    if is_silent
+                    else min(1.0, frame.rms / max(1.0, self.silence_threshold * 3.0))
+                )
+                spread = 14 + int(42 * energy_norm)
+                if is_drop or is_beat:
+                    kick_mag = 22 + int(22 * energy_norm)
+                    kick_phase = current_time * 5.0 + (frame.beat_index * 0.9)
+                    self._laser_kick_h = math.sin(kick_phase) * kick_mag
+                    self._laser_kick_v = math.cos(kick_phase * 0.93) * kick_mag
+                self._laser_kick_h *= 0.86
+                self._laser_kick_v *= 0.86
+                base_h = 63 + int(
+                    math.sin(current_time * (0.9 + energy_norm * 2.0)) * spread
+                )
+                base_v = 63 + int(
+                    math.cos(current_time * (0.75 + energy_norm * 1.8)) * spread
+                )
+                desired_h = int(base_h + self._laser_kick_h)
+                desired_v = int(base_v + self._laser_kick_v)
+                blend = 0.09 if is_silent else (0.48 if (is_drop or is_beat) else 0.24)
+                self._laser_last_beat = is_beat
+
+            if self.laser_novelty_shape or is_drop or is_loud or is_beat:
+                laser.speed(pattern_speed)
+            else:
+                laser.size(28 if is_silent else 18)
+
+            if self.laser_novelty_shape:
+                laser.rotate(0)
+            elif is_loud or is_drop:
+                rotation = int((current_time * 30) % 128)
+                laser.rotate(rotation)
+
+        desired_h = max(0, min(127, desired_h))
+        desired_v = max(0, min(127, desired_v))
+        self._laser_h_pos += (desired_h - self._laser_h_pos) * blend
+        self._laser_v_pos += (desired_v - self._laser_v_pos) * blend
+        laser.horizontal_position(int(self._laser_h_pos))
+        laser.vertical_position(int(self._laser_v_pos))
+
     def _run_loop(self, usb_mic: USBMicrophone) -> None:
         laser: Optional[Laser] = self.devices.get("laser")  # type: ignore[assignment]
         strobe: Optional[Strobe] = self.devices.get("strobe")  # type: ignore[assignment]
@@ -189,10 +485,10 @@ class LightShowController:
             spotlight.set_strobe(0)
 
         if laser:
-            laser.set_mode("manual")
-            laser.set_mode_level(0)
-            laser.color(0)
-            laser.pattern(0)
+            laser.set_mode("auto")
+            laser.set_mode_level(128)
+            laser.color(42)  # Start in blue segment
+            laser.pattern(8)
 
         if stinger:
             # Base look: manual control, laser off, moonflower only
@@ -288,8 +584,13 @@ class LightShowController:
                 self.max_vol = frame.rms
                 logger.debug(f"New max RMS: {self.max_vol:.1f}")
 
+            # In novelty tracing mode, keep laser control exclusive to _update_laser
+            # so effect-engine randomization cannot scramble the traced shape.
+            engine_laser = (
+                None if (self.laser_novelty_shape or frame.rms <= 0) else laser
+            )
             devices = Devices(
-                laser=laser,
+                laser=engine_laser,
                 strobe=strobe,
                 spotlight=spotlight,
                 stinger=stinger,
@@ -308,6 +609,10 @@ class LightShowController:
                 thresholds=thresholds,
                 devices=devices,
             )
+
+            # Activate laser based on audio features (fallback since effect engine
+            # may not fully drive the laser device).
+            self._update_laser(laser, frame, current_time)
 
             # Log a human-readable snapshot roughly once per second.
             if int(current_time) != int(self.last_effect_time):
