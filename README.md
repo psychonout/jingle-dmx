@@ -1,6 +1,12 @@
 # jingle-dmx
 
 All sorts of lightning-producing fun
+Built on Raspberry 4 2GB, uses a cheap microphone from aliexpress.
+Also uses a cheap usb to dmx adapter from aliexpress
+
+Converts microphone input into DMX output.
+
+100% vibe-coded.
 
 ## Setup
 
@@ -21,13 +27,13 @@ audio processing. To build it into a wheel and install it into your
 virtualenv using `uv`:
 
 ```sh
-cd /home/pi/jingle-dmx
+cd /path/to/jingle-dmx
 
 # Build a wheel using the PEP 517 build backend
 uv build --wheel
 
 # Install the freshly built wheel into the current environment
-uv pip install dist/jingle_dmx-0.1.0-cp313-cp313-linux_aarch64.whl
+uv pip install dist/jingle_dmx-*.whl
 ```
 
 What this does:
@@ -54,13 +60,13 @@ When you change `audio_core.pyx` (or other build-related files like
 wheel so the compiled extension matches the Python code:
 
 ```sh
-cd /home/pi/jingle-dmx
+cd /path/to/jingle-dmx
 
 # Rebuild the wheel after changing Cython sources
 uv build --wheel
 
 # Reinstall the updated wheel into your environment
-uv pip install --force-reinstall dist/jingle_dmx-0.1.0-cp313-cp313-linux_aarch64.whl
+uv pip install --force-reinstall dist/jingle_dmx-*.whl
 ```
 
 After that, restart any running service or process that imports

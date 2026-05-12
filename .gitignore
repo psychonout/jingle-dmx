@@ -1,1 +1,12 @@
 build/
+*.egg-info/
+dist/
+.venv/
+*.log
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+audio_core.cpython-*.so
+*.prof
+profile.svg

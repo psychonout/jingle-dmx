@@ -1,7 +1,7 @@
 [project]
 name = "jingle-dmx"
 version = "0.1.0"
-description = "Add your description here"
+description = "DMX controller built on Raspberry Pi 4"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

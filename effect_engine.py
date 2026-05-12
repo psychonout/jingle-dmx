@@ -30,6 +30,36 @@ STINGER_LASER_BOOST_SPEED = 200
 STINGER_LASER_SLOW_SPEED = 85
 
 # ---------------------------------------------------------------------------
+# Laser speed profiles – adjust these to change laser movement speed globally.
+# Each profile has a base speed and rotation speed (min, max tuples).
+# ---------------------------------------------------------------------------
+LASER_SPEED_BEAT_FAST = (50, 58)            # Fast beat effects
+LASER_SPEED_BEAT_NORMAL = (46, 55)          # Normal beat effects
+LASER_SPEED_BEAT_BASE = 46                  # Used with intensity multiplier
+
+LASER_SPEED_BASS = (46, 58)                 # Bass-heavy effects
+LASER_ROTATION_BASS = (40, 65)              # Bass rotation
+
+LASER_SPEED_MID = (46, 60)                  # Mid-range effects
+LASER_ROTATION_MID = (30, 55)               # Mid rotation
+
+LASER_SPEED_HIGH = (46, 55)                 # High-energy effects
+LASER_ROTATION_HIGH = (50, 78)              # High rotation
+
+LASER_SPEED_MEGA_COMBO = 50                 # Mega combo base (+ intensity * 15)
+LASER_ROTATION_MEGA = (60, 78)              # Mega combo rotation
+
+LASER_SPEED_COMBO = 46                      # Combo base (+ intensity * 20)
+LASER_ROTATION_COMBO = (40, 70)             # Combo rotation
+
+LASER_SPEED_STROBE = 46                     # Strobe effect
+LASER_ROTATION_STROBE = (50, 78)            # Strobe rotation
+
+LASER_SPEED_AMBIENT = 46                    # Ambient/subtle
+LASER_ROTATION_AMBIENT_ACTIVE = (20, 40)   # Ambient rotation (active)
+LASER_ROTATION_AMBIENT_SUBTLE = (15, 35)   # Ambient rotation (subtle)
+
+# ---------------------------------------------------------------------------
 # Named DMX intensity bands – replaces bare magic numbers in effect logic.
 # ---------------------------------------------------------------------------
 _DIMMER_FULL: int = 255  # 100 % brightness
@@ -287,9 +317,9 @@ class BeatEffectStrategy(EffectStrategy):
         )
         # Bar and phrase beats get a faster laser sweep for rhythmic impact.
         laser_speed = (
-            rng.randint(200, 215)
+            rng.randint(*LASER_SPEED_BEAT_FAST)
             if (frame.on_bar or frame.building_energy)
-            else rng.randint(192, 210)
+            else rng.randint(*LASER_SPEED_BEAT_NORMAL)
         )
 
         if strobe:
@@ -358,7 +388,7 @@ class BeatEffectStrategy(EffectStrategy):
             laser.speed(laser_speed)
             # Bass beats: fast spin; other beats: moderate rotation.
             if is_bass_beat:
-                laser.rotation_speed(rng.randint(200, 255))
+                laser.rotation_speed(rng.randint(*LASER_ROTATION_HIGH))
             else:
                 laser.rotate(rng.randint(0, 127))
         if stinger:
@@ -503,8 +533,8 @@ class FrequencyEffectStrategy(EffectStrategy):
             )
             laser.color(self._laser_color_for_mood(rng, mood="warm"))
             laser.pattern(rng.choice(_LASER_PRESETS_DRAMATIC))
-            laser.speed(rng.randint(192, 215))
-            laser.rotation_speed(rng.randint(180, 230))
+            laser.speed(rng.randint(*LASER_SPEED_BASS))
+            laser.rotation_speed(rng.randint(*LASER_ROTATION_BASS))
         if stinger:
             # Bass: moonflower only, no strobe
             stinger.set_show_mode(0)
@@ -565,8 +595,8 @@ class FrequencyEffectStrategy(EffectStrategy):
             )
             laser.color(self._laser_color_for_mood(rng, mood="cool"))
             laser.pattern(rng.choice(_LASER_PRESETS_CHILL))
-            laser.speed(rng.randint(192, 220))
-            laser.rotation_speed(rng.randint(160, 210))
+            laser.speed(rng.randint(*LASER_SPEED_MID))
+            laser.rotation_speed(rng.randint(*LASER_ROTATION_MID))
         if stinger:
             # Mid: moonflower with smooth colour blend
             stinger.set_show_mode(0)
@@ -634,8 +664,8 @@ class FrequencyEffectStrategy(EffectStrategy):
             )
             laser.color(self._laser_color_for_mood(rng, mood="dramatic"))
             laser.pattern(rng.choice(_LASER_PRESETS_ENERGETIC))
-            laser.speed(rng.randint(192, 210))
-            laser.rotation_speed(rng.randint(200, 255))
+            laser.speed(rng.randint(*LASER_SPEED_HIGH))
+            laser.rotation_speed(rng.randint(*LASER_ROTATION_HIGH))
         if stinger:
             # High: maximum energy – laser + strobe + fast moonflower
             stinger.set_show_mode(0)
@@ -713,8 +743,8 @@ class MegaComboEffectStrategy(EffectStrategy):
             )
             laser.color(self._laser_color_for_mood(rng, mood="dramatic"))
             laser.pattern(rng.choice(_LASER_PRESETS_DRAMATIC))
-            laser.speed(self._cap(int(200 + intensity * 15), 255))
-            laser.rotation_speed(rng.randint(220, 255))
+            laser.speed(self._cap(int(LASER_SPEED_MEGA_COMBO + intensity * 15), 255))
+            laser.rotation_speed(rng.randint(*LASER_ROTATION_MEGA))
         if stinger:
             # Mega combo: everything at high intensity, scaled by RMS
             stinger.set_show_mode(0)
@@ -787,8 +817,8 @@ class ComboEffectStrategy(EffectStrategy):
             )
             laser.color(self._laser_color(rng, intensity))
             laser.pattern(rng.choice(_LASER_PRESETS_ENERGETIC))
-            laser.speed(self._cap(int(192 + (intensity * 20)), 255))
-            laser.rotation_speed(rng.randint(180, 240))
+            laser.speed(self._cap(int(LASER_SPEED_COMBO + (intensity * 20)), 255))
+            laser.rotation_speed(rng.randint(*LASER_ROTATION_COMBO))
         if stinger:
             if intensity > 0.8:
                 # COMBO HIGH: Laser active
@@ -892,8 +922,8 @@ class StrobeEffectStrategy(EffectStrategy):
             )
             laser.color(self._laser_color_for_mood(rng, mood="dramatic"))
             laser.pattern(rng.choice(_LASER_PRESETS_ENERGETIC))
-            laser.speed(self._cap(int(192 + (effect_intensity * 20)), 255))
-            laser.rotation_speed(rng.randint(200, 255))
+            laser.speed(self._cap(int(LASER_SPEED_STROBE + (effect_intensity * 20)), 255))
+            laser.rotation_speed(rng.randint(*LASER_ROTATION_STROBE))
         if stinger:
             if effect_intensity > 0.7:
                 # STROBE HIGH: Laser + heavy strobing
@@ -999,8 +1029,8 @@ class AmbientEffectStrategy(EffectStrategy):
             )
             laser.color(self._cached_laser_color)
             laser.pattern(self._cached_laser_pattern)
-            laser.speed(192)
-            laser.rotation_speed(rng.randint(140, 180))
+            laser.speed(LASER_SPEED_AMBIENT)
+            laser.rotation_speed(rng.randint(*LASER_ROTATION_AMBIENT_ACTIVE))
         if stinger:
             # AMBIENT: Smooth moonflower
             stinger.set_show_mode(0)
@@ -1080,8 +1110,8 @@ class SubtleEffectStrategy(EffectStrategy):
                 laser.set_mode_level(int(128 + (frame.rms / min_threshold) * 32))
                 laser.color(self._cached_laser_color)
                 laser.pattern(self._cached_laser_pattern)
-                laser.speed(192)
-                laser.rotation_speed(rng.randint(130, 170))
+                laser.speed(LASER_SPEED_AMBIENT)
+                laser.rotation_speed(rng.randint(*LASER_ROTATION_AMBIENT_SUBTLE))
             else:
                 laser.set_mode("auto")
                 laser.set_mode_level(int(128 + (frame.rms / min_threshold) * 16))
@@ -1166,7 +1196,7 @@ class SilenceEffectStrategy(EffectStrategy):
             laser.set_mode("auto")
             laser.set_mode_level(128)
             laser.color(_LASER_BLUE)
-            laser.speed(192)
+            laser.speed(LASER_SPEED_AMBIENT)
 
         if stinger:
             # Only blackout after 60 seconds of silence
