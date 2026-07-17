@@ -69,7 +69,6 @@ _DIMMER_LOW: int = 120  # ~47 % – background glow
 _STROBE_FAST: int = 200  # Fast burst (beat-sync)
 _STROBE_MED: int = 130  # Mid-tempo pulse
 _STROBE_SLOW: int = 80  # Slow sweep
-_EUROLITE_DIMMER_MAX: int = 170
 _EUROLITE_COLOR_MIN: int = 90
 _EUROLITE_COLOR_MAX: int = 165
 
@@ -176,8 +175,8 @@ class EffectStrategy(ABC):
         return int(red_f * 255), int(green_f * 255), int(blue_f * 255)
 
     def _eurolite_dimmer_level(self, intensity: float, profile: ShowProfile) -> int:
-        target = int(_DIMMER_LOW + intensity * 50)
-        return self._cap(target, min(profile.max_dimmer_level, _EUROLITE_DIMMER_MAX))
+        target = int(_DIMMER_LOW + intensity * (_DIMMER_FULL - _DIMMER_LOW))
+        return self._cap(target, profile.max_eurolite_level)
 
     @staticmethod
     def _laser_color(rng: random.Random, intensity: float = 1.0) -> int:
@@ -347,7 +346,7 @@ class BeatEffectStrategy(EffectStrategy):
             if frame.on_phrase:
                 strobe_effect = 180
             eurolite_strobe.set_strobe_effect(
-                self._cap(strobe_effect, profile.max_strobe_level)
+                self._cap(strobe_effect, profile.max_eurolite_level)
             )
             brightness = int(
                 _EUROLITE_COLOR_MIN
@@ -360,16 +359,16 @@ class BeatEffectStrategy(EffectStrategy):
         if spotlight:
             spotlight.random_color()
             spotlight.set_brightness(dimmer_level)
-            # Phrase = full strobe burst; bar = stronger flash; normal = regular.
+            # Phrase = steady on; bar = slow flash; normal = medium flash.
             if frame.on_phrase:
-                spotlight.set_strobe(self._cap(_DIMMER_FULL, profile.max_strobe_level))
+                spotlight.set_strobe(0)
             elif frame.on_bar:
                 spotlight.set_strobe(
-                    self._cap(rng.randint(210, 240), profile.max_strobe_level)
+                    self._cap(rng.randint(40, 70), profile.max_strobe_level)
                 )
             else:
                 spotlight.set_strobe(
-                    self._cap(rng.randint(192, 223), profile.max_strobe_level)
+                    self._cap(rng.randint(20, 50), profile.max_strobe_level)
                 )
         if laser:
             # Beat: switch to auto mode so colour takes effect, pick a
@@ -491,7 +490,7 @@ class FrequencyEffectStrategy(EffectStrategy):
             devices.eurolite_strobe.set_color(red, green, blue)
             if frame.building_energy:
                 devices.eurolite_strobe.set_strobe_effect(
-                    self._cap(rng.randint(120, 170), profile.max_strobe_level)
+                    self._cap(rng.randint(120, 170), profile.max_eurolite_level)
                 )
 
     def _bass_heavy_effects(
@@ -523,8 +522,7 @@ class FrequencyEffectStrategy(EffectStrategy):
             spotlight.set_brightness(
                 self._cap(int(_DIMMER_MED + intensity * 75), profile.max_dimmer_level)
             )
-            spotlight.set_strobe(rng.randint(64, 95))
-            spotlight.set_macro(rng.randint(100, 150))
+            spotlight.set_strobe(rng.randint(20, 50))
         if laser:
             # Bass: auto mode with warm red/gold colour, dramatic presets.
             laser.set_mode("auto")
@@ -553,7 +551,9 @@ class FrequencyEffectStrategy(EffectStrategy):
             stinger.set_moonflower_rotation("cw", speed=int(40 + intensity * 25))
         if eurolite_strobe:
             eurolite_strobe.open_gates()
-            eurolite_strobe.set_strobe_effect(rng.randint(80, 102))
+            eurolite_strobe.set_strobe_effect(
+                self._cap(rng.randint(80, 102), profile.max_eurolite_level)
+            )
             # Placeholder colour; overridden by proportional blend in apply().
             eurolite_strobe.set_color(120, rng.randint(0, 20), 0)
 
@@ -586,7 +586,7 @@ class FrequencyEffectStrategy(EffectStrategy):
             spotlight.set_brightness(
                 self._cap(int(_DIMMER_LOW + intensity * 100), profile.max_dimmer_level)
             )
-            spotlight.set_strobe(rng.randint(128, 159))
+            spotlight.set_strobe(rng.randint(30, 60))
         if laser:
             # Mid: auto mode with cool green/blue colour, flowing presets.
             laser.set_mode("auto")
@@ -615,7 +615,9 @@ class FrequencyEffectStrategy(EffectStrategy):
             stinger.set_moonflower_rotation("cw", speed=int(45 + intensity * 30))
         if eurolite_strobe:
             eurolite_strobe.open_gates()
-            eurolite_strobe.set_strobe_effect(rng.randint(34, 56))
+            eurolite_strobe.set_strobe_effect(
+                self._cap(rng.randint(34, 56), profile.max_eurolite_level)
+            )
             # Placeholder colour; overridden by proportional blend in apply().
             eurolite_strobe.set_color(
                 rng.randint(60, 120), rng.randint(0, 40), rng.randint(80, 140)
@@ -655,7 +657,7 @@ class FrequencyEffectStrategy(EffectStrategy):
             spotlight.set_brightness(
                 self._cap(int(_DIMMER_MED + intensity * 75), profile.max_dimmer_level)
             )
-            spotlight.set_strobe(rng.randint(224, 255))
+            spotlight.set_strobe(rng.randint(50, 80))
         if laser:
             # High: auto mode with dramatic red/blue, energetic presets.
             laser.set_mode("auto")
@@ -687,7 +689,9 @@ class FrequencyEffectStrategy(EffectStrategy):
             stinger.set_moonflower_rotation("ccw", speed=int(50 + intensity * 30))
         if eurolite_strobe:
             eurolite_strobe.open_gates()
-            eurolite_strobe.set_strobe_effect(int(_STROBE_MED + intensity * 70))
+            eurolite_strobe.set_strobe_effect(
+                self._cap(int(_STROBE_MED + intensity * 70), profile.max_eurolite_level)
+            )
             # Placeholder colour; overridden by proportional blend in apply().
             eurolite_strobe.set_color(rng.randint(0, 20), rng.randint(0, 20), 140)
 
@@ -1010,8 +1014,7 @@ class AmbientEffectStrategy(EffectStrategy):
             strobe.set_dimmer(0)
             strobe.set_strobe(0)
         if spotlight:
-            spotlight.set_brightness(0)
-            spotlight.set_strobe(0)
+            spotlight.ambient_mode(frame.rms)
         if laser:
             now = time.time()
             if now - self._last_refresh > 1.25:
@@ -1049,9 +1052,11 @@ class AmbientEffectStrategy(EffectStrategy):
         if eurolite_strobe:
             eurolite_strobe.open_gates()
             eurolite_strobe.set_dimmer(
-                self._cap(110, min(profile.max_dimmer_level, _EUROLITE_DIMMER_MAX))
+                self._cap(110, profile.max_eurolite_level)
             )
-            eurolite_strobe.set_strobe_effect(rng.randint(34, 79))
+            eurolite_strobe.set_strobe_effect(
+                self._cap(rng.randint(34, 79), profile.max_eurolite_level)
+            )
             red, green, blue = self._random_eurolite_color(
                 rng, brightness=_EUROLITE_COLOR_MIN
             )
@@ -1093,8 +1098,7 @@ class SubtleEffectStrategy(EffectStrategy):
             strobe.set_dimmer(0)
             strobe.set_strobe(0)
         if spotlight:
-            spotlight.set_brightness(0)
-            spotlight.set_strobe(0)
+            spotlight.ambient_mode(frame.rms * 0.5)
         if laser:
             if frame.rms > min_threshold * 1.2:
                 now = time.time()
@@ -1135,10 +1139,12 @@ class SubtleEffectStrategy(EffectStrategy):
                 eurolite_strobe.set_dimmer(
                     self._cap(
                         int(95 + (frame.rms / min_threshold) * 30),
-                        min(profile.max_dimmer_level, _EUROLITE_DIMMER_MAX),
+                        profile.max_eurolite_level,
                     )
                 )
-                eurolite_strobe.set_strobe_effect(rng.randint(34, 79))
+                eurolite_strobe.set_strobe_effect(
+                    self._cap(rng.randint(34, 79), profile.max_eurolite_level)
+                )
                 red, green, blue = self._random_eurolite_color(
                     rng, brightness=_EUROLITE_COLOR_MIN
                 )

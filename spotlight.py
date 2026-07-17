@@ -225,4 +225,5 @@ class Spotlight(BaseDMX):
         w = 30
 
         self.set_color_rgb(r, g, b, w)
+        self.set_strobe(0)
         self.set_brightness(base_brightness + volume_brightness)

@@ -42,6 +42,8 @@ class ShowProfile:
     max_dimmer_level: int = 255
     max_uv_level: int = 255
     max_laser_level: int = 255
+    max_vu_level: int = 255
+    max_eurolite_level: int = 255
 
 
 def load_default_profile() -> ShowProfile:
@@ -68,6 +70,8 @@ def load_default_profile() -> ShowProfile:
             max_dimmer_level=180,
             max_uv_level=180,
             max_laser_level=180,
+            max_vu_level=180,
+            max_eurolite_level=180,
         )
     if env_name == "bass_party":
         return ShowProfile(
@@ -84,6 +88,8 @@ def load_default_profile() -> ShowProfile:
             max_dimmer_level=220,
             max_uv_level=255,
             max_laser_level=220,
+            max_vu_level=220,
+            max_eurolite_level=220,
         )
     if env_name == "ambient_subtle":
         return ShowProfile(
@@ -100,6 +106,8 @@ def load_default_profile() -> ShowProfile:
             max_dimmer_level=100,
             max_uv_level=80,
             max_laser_level=80,
+            max_vu_level=100,
+            max_eurolite_level=80,
         )
     # Default "club" profile: everything on, high energy.
     return ShowProfile(
@@ -116,4 +124,6 @@ def load_default_profile() -> ShowProfile:
         max_dimmer_level=255,
         max_uv_level=255,
         max_laser_level=255,
+        max_vu_level=255,
+        max_eurolite_level=255,
     )

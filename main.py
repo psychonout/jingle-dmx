@@ -9,12 +9,14 @@ and runs the main light show controller.
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
 from loguru import logger
 
-from config import DeviceConfig
+from config import DeviceConfig, load_default_profile
+from runtime_control import RuntimeControl
 from show_controller import LightShowController
 
 # Configure logger
@@ -95,12 +97,43 @@ def run_controller() -> None:
     config = DeviceConfig(
         use_laser=True,
         use_strobe=True,
-        use_spotlight=False,
+        use_spotlight=True,
         use_stinger=True,
         use_vu_meter=True,
         use_eurolite_strobe=True,
     )
-    controller = LightShowController(device_config=config)
+    profile = load_default_profile()
+    runtime_control = RuntimeControl(config, profile)
+    controller = LightShowController(
+        device_config=config,
+        show_profile=profile,
+        runtime_control=runtime_control,
+    )
+
+    web_enabled = os.getenv("WEB_CONTROLLER_ENABLED", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if web_enabled:
+        try:
+            import uvicorn
+
+            from web_controller import create_app
+
+            host = os.getenv("WEB_CONTROLLER_HOST", "0.0.0.0")
+            port = int(os.getenv("WEB_CONTROLLER_PORT", "8080"))
+            app = create_app(runtime_control)
+
+            def run_web() -> None:
+                uvicorn.run(app, host=host, port=port, log_level="warning")
+
+            web_thread = threading.Thread(target=run_web, daemon=True)
+            web_thread.start()
+            logger.info(f"Web controller running on http://{host}:{port}")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Failed to start web controller: {exc}")
+
     controller.run()
 
 

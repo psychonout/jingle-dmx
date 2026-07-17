@@ -17,6 +17,7 @@ from laser import (
     Laser,
 )
 from light_strip import VUMeter
+from runtime_control import RuntimeControl
 from spotlight import Spotlight
 from stinger import StingerII
 from strobe import Strobe
@@ -43,6 +44,7 @@ class LightShowController:
         self,
         device_config: Optional[DeviceConfig] = None,
         show_profile: Optional[ShowProfile] = None,
+        runtime_control: Optional[RuntimeControl] = None,
     ) -> None:
         self.config = device_config or DeviceConfig()
 
@@ -50,6 +52,9 @@ class LightShowController:
         # randomness behaves. If not provided explicitly, we pick one
         # based on the SHOW_PROFILE environment variable.
         self.profile: ShowProfile = show_profile or load_default_profile()
+        self.runtime_control = runtime_control or RuntimeControl(
+            self.config, self.profile
+        )
 
         self.threshold_system = AdaptiveThresholds(
             smoothing_factor=0.95,
@@ -104,6 +109,62 @@ class LightShowController:
         self.pattern_detector = MusicPatternDetector(
             effect_variations=self.effect_engine.get_effect_variation_count()
         )
+
+    def _blackout_all_devices(
+        self,
+        laser: Optional[Laser],
+        strobe: Optional[Strobe],
+        spotlight: Optional[Spotlight],
+        stinger: Optional[StingerII],
+        vu_meter: Optional[VUMeter],
+        eurolite_strobe: Optional[EuroliteStrobe],
+    ) -> None:
+        if strobe:
+            strobe.set_dimmer(0)
+            strobe.set_strobe(0)
+            strobe.set_warm_white(0)
+            strobe.set_cold_white(0)
+            strobe.set_color(0)
+            strobe.set_macro(0)
+            strobe.set_macro_speed(0)
+        if spotlight:
+            spotlight.turn_off()
+        if laser:
+            laser.set_mode("off")
+            laser.set_mode_level(0)
+        if stinger:
+            stinger.blackout()
+        if vu_meter:
+            vu_meter.reset()
+        if eurolite_strobe:
+            eurolite_strobe.close_gates()
+
+    def _enforce_device_disables(
+        self,
+        flags: Dict[str, bool],
+        laser: Optional[Laser],
+        strobe: Optional[Strobe],
+        spotlight: Optional[Spotlight],
+        stinger: Optional[StingerII],
+        vu_meter: Optional[VUMeter],
+        eurolite_strobe: Optional[EuroliteStrobe],
+    ) -> None:
+        if not flags.get("use_strobe", True) and strobe:
+            strobe.set_dimmer(0)
+            strobe.set_strobe(0)
+            strobe.set_warm_white(0)
+            strobe.set_cold_white(0)
+        if not flags.get("use_spotlight", True) and spotlight:
+            spotlight.turn_off()
+        if not flags.get("use_laser", True) and laser:
+            laser.set_mode("off")
+            laser.set_mode_level(0)
+        if not flags.get("use_stinger", True) and stinger:
+            stinger.blackout()
+        if not flags.get("use_vu_meter", True) and vu_meter:
+            vu_meter.reset()
+        if not flags.get("use_eurolite_strobe", True) and eurolite_strobe:
+            eurolite_strobe.close_gates()
 
     # --- device lifecycle -------------------------------------------------
 
@@ -575,8 +636,40 @@ class LightShowController:
                 self.threshold_system.get_thresholds()
             )
 
+            control_profile = self.runtime_control.effective_profile()
+            self.effect_engine.profile = control_profile
+            device_flags = self.runtime_control.device_flags()
+
+            if self.runtime_control.is_blackout():
+                self._blackout_all_devices(
+                    laser,
+                    strobe,
+                    spotlight,
+                    stinger,
+                    vu_meter,
+                    eurolite_strobe,
+                )
+                self.last_effect_type = "blackout"
+                time.sleep(self.effect_interval)
+                self.last_effect_time = current_time
+                continue
+
+            self._enforce_device_disables(
+                device_flags,
+                laser,
+                strobe,
+                spotlight,
+                stinger,
+                vu_meter,
+                eurolite_strobe,
+            )
+
             if vu_meter:
-                vu_meter.update(frame.rms)
+                if device_flags.get("use_vu_meter", True):
+                    vu_scale = control_profile.max_vu_level / 255.0
+                    vu_meter.update(frame.rms * vu_scale)
+                else:
+                    vu_meter.reset()
 
             self.last_rms = frame.rms
 
@@ -587,15 +680,25 @@ class LightShowController:
             # In novelty tracing mode, keep laser control exclusive to _update_laser
             # so effect-engine randomization cannot scramble the traced shape.
             engine_laser = (
-                None if (self.laser_novelty_shape or frame.rms <= 0) else laser
+                None
+                if (
+                    self.laser_novelty_shape
+                    or frame.rms <= 0
+                    or not device_flags.get("use_laser", True)
+                )
+                else laser
             )
             devices = Devices(
                 laser=engine_laser,
-                strobe=strobe,
-                spotlight=spotlight,
-                stinger=stinger,
-                vu_meter=vu_meter,
-                eurolite_strobe=eurolite_strobe,
+                strobe=strobe if device_flags.get("use_strobe", True) else None,
+                spotlight=spotlight if device_flags.get("use_spotlight", True) else None,
+                stinger=stinger if device_flags.get("use_stinger", True) else None,
+                vu_meter=vu_meter if device_flags.get("use_vu_meter", True) else None,
+                eurolite_strobe=(
+                    eurolite_strobe
+                    if device_flags.get("use_eurolite_strobe", True)
+                    else None
+                ),
             )
             thresholds = Thresholds(
                 min_threshold=min_threshold,
@@ -612,7 +715,8 @@ class LightShowController:
 
             # Activate laser based on audio features (fallback since effect engine
             # may not fully drive the laser device).
-            self._update_laser(laser, frame, current_time)
+            if device_flags.get("use_laser", True):
+                self._update_laser(laser, frame, current_time)
 
             # Log a human-readable snapshot roughly once per second.
             if int(current_time) != int(self.last_effect_time):

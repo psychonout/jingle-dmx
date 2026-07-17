@@ -1,0 +1,31 @@
+{
+  "profile": {
+    "name": "club",
+    "enable_beat": true,
+    "enable_frequency": true,
+    "enable_combo": true,
+    "enable_mega_combo": true,
+    "enable_strobe_only": true,
+    "enable_ambient": true,
+    "enable_subtle": true,
+    "random_seed": null,
+    "max_strobe_level": 255,
+    "max_dimmer_level": 255,
+    "max_uv_level": 255,
+    "max_laser_level": 255,
+    "max_vu_level": 255,
+    "max_eurolite_level": 255
+  },
+  "devices": {
+    "use_laser": true,
+    "use_strobe": true,
+    "use_spotlight": true,
+    "use_stinger": true,
+    "use_vu_meter": true,
+    "use_eurolite_strobe": true
+  },
+  "runtime": {
+    "master_intensity": 0.33,
+    "blackout": false
+  }
+}

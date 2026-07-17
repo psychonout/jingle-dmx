@@ -75,11 +75,11 @@ picks up the new shared library.
 
 ## Service Management
 
-To update the systemd service after changing `jingle-dmx.service`:
+To install or update the systemd service:
 
 ```sh
-# Copy the service file to the system directory
-sudo cp jingle-dmx.service /etc/systemd/system/
+# Symlink the service file into the system directory
+sudo ln -sf /home/pi/jingle-dmx/jingle-dmx.service /etc/systemd/system/jingle-dmx.service
 
 # Reload systemd to see the changes
 sudo systemctl daemon-reload
@@ -89,4 +89,40 @@ sudo systemctl restart jingle-dmx
 
 # Check status
 sudo systemctl status jingle-dmx
+```
+
+## Web Controller
+
+The project now includes a live web controller for runtime tweaks.
+
+It supports:
+
+- enabling or disabling effect families (beat/frequency/combo/etc.)
+- per-device enable/disable flags
+- live intensity caps for dimmer/strobe/UV/laser
+- a master intensity slider (`0.0` to `1.0`)
+- blackout / panic blackout
+
+By default, the controller starts with the main process on:
+
+```sh
+http://0.0.0.0:8080/
+```
+
+By default, requests are accepted only from loopback and private/link-local
+network IP ranges, so remote control works on your LAN but is blocked from
+public internet addresses.
+
+Environment variables:
+
+- `WEB_CONTROLLER_ENABLED=true|false` (default: `true`)
+- `WEB_CONTROLLER_HOST` (default: `0.0.0.0`)
+- `WEB_CONTROLLER_PORT` (default: `8080`)
+- `WEB_CONTROLLER_LOCAL_ONLY=true|false` (default: `true`)
+- `WEB_CONTROLLER_ALLOWED_CIDRS` (optional comma-separated extra CIDRs to allow)
+
+Example:
+
+```sh
+WEB_CONTROLLER_ENABLED=true WEB_CONTROLLER_HOST=0.0.0.0 WEB_CONTROLLER_LOCAL_ONLY=true WEB_CONTROLLER_PORT=8090 uv run python main.py
 ```

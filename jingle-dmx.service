@@ -12,6 +12,10 @@ Environment=HOME=/home/pi
 Environment=USER=pi
 Environment=PATH=/home/pi/jingle-dmx/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=SHOW_PROFILE=club
+Environment=WEB_CONTROLLER_ENABLED=true
+Environment=WEB_CONTROLLER_HOST=0.0.0.0
+Environment=WEB_CONTROLLER_PORT=8080
+Environment=WEB_CONTROLLER_LOCAL_ONLY=true
 ExecStartPre=/bin/sleep 1
 ExecStart=/home/pi/jingle-dmx/.venv/bin/python /home/pi/jingle-dmx/main.py
 Restart=always

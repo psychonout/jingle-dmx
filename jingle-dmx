@@ -4,27 +4,27 @@
 case "$1" in
     start)
         echo "Starting jingle-dmx service..."
-        sudo systemctl start jingle-dmx.service
+        sudo systemctl start jingle-dmx
         ;;
     stop)
         echo "Stopping jingle-dmx service..."
-        sudo systemctl stop jingle-dmx.service
+        sudo systemctl stop jingle-dmx
         ;;
     restart)
         echo "Restarting jingle-dmx service..."
-        sudo systemctl restart jingle-dmx.service
+        sudo systemctl restart jingle-dmx
         ;;
     status)
         echo "Checking jingle-dmx service status..."
-        sudo systemctl status jingle-dmx.service
+        sudo systemctl status jingle-dmx
         ;;
     logs)
         echo "Showing recent service logs..."
-        sudo journalctl -u jingle-dmx.service --no-pager -n 50
+        sudo journalctl -u jingle-dmx --no-pager -n 50
         ;;
     follow-logs)
         echo "Following service logs (Ctrl+C to stop)..."
-        sudo journalctl -u jingle-dmx.service -f
+        sudo journalctl -u jingle-dmx -f
         ;;
     service-logs)
         echo "Showing service log file..."
@@ -32,11 +32,11 @@ case "$1" in
         ;;
     enable)
         echo "Enabling jingle-dmx service for boot..."
-        sudo systemctl enable jingle-dmx.service
+        sudo systemctl enable jingle-dmx
         ;;
     disable)
         echo "Disabling jingle-dmx service from boot..."
-        sudo systemctl disable jingle-dmx.service
+        sudo systemctl disable jingle-dmx
         ;;
     *)
         echo "Usage: $0 {start|stop|restart|status|logs|follow-logs|service-logs|enable|disable}"
