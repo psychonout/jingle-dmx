@@ -25,7 +25,7 @@
     "use_eurolite_strobe": true
   },
   "runtime": {
-    "master_intensity": 0.33,
+    "master_intensity": 1.0,
     "blackout": false
   }
 }
