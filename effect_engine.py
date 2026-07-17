@@ -1195,7 +1195,10 @@ class SilenceEffectStrategy(EffectStrategy):
             strobe.set_macro(0)
             strobe.set_macro_speed(0)
         if spotlight:
-            spotlight.turn_off()
+            # Only turn off after a few seconds of silence, same as the
+            # stinger - keep whatever effect was running before silence.
+            if silence_duration >= 5.0:
+                spotlight.turn_off()
         if laser:
             # Keep laser dimly visible even during silence.
             # Use auto mode so colour takes effect.
