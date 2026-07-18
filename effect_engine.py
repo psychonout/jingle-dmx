@@ -734,7 +734,7 @@ class MegaComboEffectStrategy(EffectStrategy):
             strobe.set_color(70)
             strobe.set_warm_white(self._cap(_DIMMER_MED, profile.max_strobe_level))
         if spotlight:
-            spotlight.set_color_rgb(255, 255, 255, 255)
+            spotlight.random_color()
             spotlight.set_brightness(
                 self._cap(int(_DIMMER_HIGH + intensity * 35), profile.max_dimmer_level)
             )
@@ -906,7 +906,7 @@ class StrobeEffectStrategy(EffectStrategy):
                 strobe.set_dimmer(0)
                 strobe.set_strobe(0)
         if spotlight:
-            if effect_intensity > 1.2:
+            if effect_intensity >= 1.1:
                 spotlight.set_brightness(self._cap(255, profile.max_dimmer_level))
                 spotlight.set_strobe(
                     self._cap(
