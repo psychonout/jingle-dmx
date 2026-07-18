@@ -358,7 +358,12 @@ class BeatEffectStrategy(EffectStrategy):
                 eurolite_strobe.set_sound_control(rng.randint(60, 130))
         if spotlight:
             spotlight.random_color()
-            spotlight.set_brightness(dimmer_level)
+            # Spotlight gets its own, much wider brightness swing than the
+            # strobe fixture's dimmer_level so quiet vs loud beats are
+            # actually visible instead of hovering near max.
+            spotlight.set_brightness(
+                self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
+            )
             # Phrase = steady on; bar = slow flash; normal = medium flash.
             if frame.on_phrase:
                 spotlight.set_strobe(0)
@@ -520,7 +525,7 @@ class FrequencyEffectStrategy(EffectStrategy):
                 rng.randint(0, 50),
             )
             spotlight.set_brightness(
-                self._cap(int(_DIMMER_MED + intensity * 75), profile.max_dimmer_level)
+                self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
             )
             spotlight.set_strobe(rng.randint(20, 50))
         if laser:
@@ -584,7 +589,7 @@ class FrequencyEffectStrategy(EffectStrategy):
                 rng.randint(0, 50),
             )
             spotlight.set_brightness(
-                self._cap(int(_DIMMER_LOW + intensity * 100), profile.max_dimmer_level)
+                self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
             )
             spotlight.set_strobe(rng.randint(30, 60))
         if laser:
@@ -655,7 +660,7 @@ class FrequencyEffectStrategy(EffectStrategy):
                 rng.randint(100, 255),
             )
             spotlight.set_brightness(
-                self._cap(int(_DIMMER_MED + intensity * 75), profile.max_dimmer_level)
+                self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
             )
             spotlight.set_strobe(rng.randint(50, 80))
         if laser:
@@ -735,8 +740,10 @@ class MegaComboEffectStrategy(EffectStrategy):
             strobe.set_warm_white(self._cap(_DIMMER_MED, profile.max_strobe_level))
         if spotlight:
             spotlight.random_color()
+            # Mega combo stays the brightest tier overall, but still swings
+            # with intensity instead of sitting in a narrow near-max band.
             spotlight.set_brightness(
-                self._cap(int(_DIMMER_HIGH + intensity * 35), profile.max_dimmer_level)
+                self._cap(int(140 + intensity * 115), profile.max_dimmer_level)
             )
             spotlight.set_strobe(self._cap(_DIMMER_FULL, profile.max_strobe_level))
         if laser:
@@ -808,7 +815,7 @@ class ComboEffectStrategy(EffectStrategy):
         if spotlight:
             spotlight.random_color()
             spotlight.set_brightness(
-                self._cap(int(200 + (intensity * 55)), profile.max_dimmer_level)
+                self._cap(int(90 + (intensity * 165)), profile.max_dimmer_level)
             )
             spotlight.set_strobe(
                 self._cap(int(150 + (intensity * 105)), profile.max_strobe_level)
@@ -905,7 +912,7 @@ class StrobeEffectStrategy(EffectStrategy):
                 spotlight_intensity = min(1.0, (effect_intensity - 1.1) / 0.4)
                 spotlight.set_brightness(
                     self._cap(
-                        int(150 + spotlight_intensity * 105), profile.max_dimmer_level
+                        int(70 + spotlight_intensity * 185), profile.max_dimmer_level
                     )
                 )
                 spotlight.set_strobe(
