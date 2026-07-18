@@ -887,27 +887,27 @@ class StrobeEffectStrategy(EffectStrategy):
         laser = devices.laser
         stinger = devices.stinger
         if strobe:
-            # Only strobe if intensity is reasonably high
-            if effect_intensity >= 1.1:
-                strobe.set_warm_white(
-                    self._cap(
-                        int(180 + (min(effect_intensity, 1.0) * 75)),
-                        profile.max_strobe_level,
-                    )
+            strobe.set_warm_white(
+                self._cap(
+                    int(180 + (min(effect_intensity, 1.0) * 75)),
+                    profile.max_strobe_level,
                 )
-                strobe.set_dimmer(self._cap(255, profile.max_dimmer_level))
-                strobe.set_strobe(
-                    self._cap(
-                        int(150 + (effect_intensity * 105)), profile.max_strobe_level
-                    )
+            )
+            strobe.set_dimmer(self._cap(255, profile.max_dimmer_level))
+            strobe.set_strobe(
+                self._cap(
+                    int(150 + (effect_intensity * 105)), profile.max_strobe_level
                 )
-            else:
-                # Turn off strobe if intensity drops
-                strobe.set_dimmer(0)
-                strobe.set_strobe(0)
+            )
         if spotlight:
             if effect_intensity >= 1.1:
-                spotlight.set_brightness(self._cap(255, profile.max_dimmer_level))
+                # Scale with how hard the hit is, rather than always maxing out.
+                spotlight_intensity = min(1.0, (effect_intensity - 1.1) / 0.4)
+                spotlight.set_brightness(
+                    self._cap(
+                        int(150 + spotlight_intensity * 105), profile.max_dimmer_level
+                    )
+                )
                 spotlight.set_strobe(
                     self._cap(
                         int(64 + min(95, effect_intensity * 95)),
