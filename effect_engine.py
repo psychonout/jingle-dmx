@@ -1014,7 +1014,8 @@ class AmbientEffectStrategy(EffectStrategy):
             strobe.set_dimmer(0)
             strobe.set_strobe(0)
         if spotlight:
-            spotlight.ambient_mode(frame.rms)
+            spotlight.set_brightness(0)
+            spotlight.set_strobe(0)
         if laser:
             now = time.time()
             if now - self._last_refresh > 1.25:
@@ -1098,7 +1099,8 @@ class SubtleEffectStrategy(EffectStrategy):
             strobe.set_dimmer(0)
             strobe.set_strobe(0)
         if spotlight:
-            spotlight.ambient_mode(frame.rms * 0.5)
+            spotlight.set_brightness(0)
+            spotlight.set_strobe(0)
         if laser:
             if frame.rms > min_threshold * 1.2:
                 now = time.time()
