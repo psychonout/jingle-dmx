@@ -5,53 +5,65 @@ from base_dmx import BaseDMX
 
 
 class Spotlight(BaseDMX):
+    # This is a BeamZ BT430 PAR strobe (see manuals/bt430.pdf), run in its
+    # 7-channel DMX mode. It has no RGB - only warm/cold white LEDs - and
+    # its real channel layout is: 0 dimmer, 1 strobe, 2 warm white,
+    # 3 cold white, 4 colour temperature, 5 macro run, 6 macro run speed.
+    # Channel 4 (colour temp) and 5 (macro run) must stay at 0 ("no
+    # function") or the fixture ignores the warm/cold levels below and
+    # runs its own auto/sound-reactive program instead.
     def __init__(self, dmx_channel: int = 22) -> None:
-        super().__init__(dmx_channel, num_channels=8)
-        self.current_color = (0, 0, 0, 0)  # R, G, B, W
+        super().__init__(dmx_channel, num_channels=7)
+        self.current_color = (0, 0, 0, 0)  # R, G, B, W (approximated - see set_color_rgb)
         self.current_brightness = 0
 
     def set_brightness(self, value: int) -> None:
-        """Set the brightness of the spotlight."""
+        """Set the master dimmer."""
         self._send(0, value)
 
-    def set_red(self, value: int) -> None:
-        """Set the red color channel."""
-        self._send(1, value)
+    def set_strobe(self, value: int) -> None:
+        """Set the strobe effect (0 = steady, higher = faster strobe)."""
+        if value <= 0:
+            self._send(1, 0)
+            return
+        # Map onto the fixture's "064-095 strobe effect slow to fast" band
+        # so any 0-255 intensity produces an actual strobe, not one of the
+        # hardware's "full on"/"no function" plateaus.
+        self._send(1, 64 + int(min(255, value) / 255 * 31))
 
-    def set_green(self, value: int) -> None:
-        """Set the green color channel."""
+    def set_warm_white(self, value: int) -> None:
+        """Set the warm white channel."""
         self._send(2, value)
 
-    def set_blue(self, value: int) -> None:
-        """Set the blue color channel."""
+    def set_cold_white(self, value: int) -> None:
+        """Set the cold white channel."""
         self._send(3, value)
 
-    def set_white(self, value: int) -> None:
-        """Set the white color channel."""
-        self._send(4, value)
-
-    def set_strobe(self, value: int) -> None:
-        """Set the strobe effect."""
+    def set_macro(self, value: int) -> None:
+        """Set the macro run program (0 = manual/off)."""
         self._send(5, value)
 
-    def set_macro(self, value: int) -> None:
-        """Set the macro effect."""
+    def set_macro_speed(self, value: int) -> None:
+        """Set the speed of the macro run program."""
         self._send(6, value)
 
-    def set_macro_speed(self, value: int) -> None:
-        """Set the speed of the macro effect."""
-        self._send(7, value)
-
     def set_color_rgb(self, red: int, green: int, blue: int, white: int = 0) -> None:
-        """Set full RGB+W color at once."""
-        # Disable macros to ensure color is visible
+        """Approximate an RGB+W color as a warm/cold white mix.
+
+        The fixture can't produce hue - only blend warm and cold white -
+        so this biases red/warm inputs toward the warm channel and
+        blue/cool inputs toward the cold channel.
+        """
+        # Keep colour temp and macro run in manual mode so the warm/cold
+        # levels below actually take effect instead of being overridden.
+        self._send(4, 0)
         self.set_macro(0)
         self.set_macro_speed(0)
 
-        self.set_red(red)
-        self.set_green(green)
-        self.set_blue(blue)
-        self.set_white(white)
+        warm = min(255, int(red * 0.8 + green * 0.2 + white * 0.5))
+        cold = min(255, int(blue * 0.8 + green * 0.2 + white * 0.5))
+        self.set_warm_white(warm)
+        self.set_cold_white(cold)
         self.current_color = (red, green, blue, white)
 
     def set_color_preset(self, preset: str) -> None:
