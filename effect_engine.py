@@ -270,6 +270,10 @@ class BeatEffectStrategy(EffectStrategy):
     priority = 100
     name = "beat"
 
+    def __init__(self):
+        super().__init__()
+        self._beat_count = 0
+
     def can_apply(
         self, frame: AudioFrame, thresholds: Thresholds, profile: ShowProfile
     ) -> bool:
@@ -288,6 +292,7 @@ class BeatEffectStrategy(EffectStrategy):
         rng: random.Random,
     ) -> None:
         logger.debug(f"BEAT TRIGGERED! RMS: {frame.rms:.1f}, Peak: {frame.peak:.1f}")
+        self._beat_count += 1
         strobe = devices.strobe
         eurolite_strobe = devices.eurolite_strobe
         spotlight = devices.spotlight
@@ -358,6 +363,10 @@ class BeatEffectStrategy(EffectStrategy):
                 eurolite_strobe.set_sound_control(rng.randint(60, 130))
         if spotlight:
             spotlight.random_color()
+            if self._beat_count % 2 == 0:
+                # Drop the cold/blue channel every other beat for an
+                # alternating warm/cool pulse.
+                spotlight.set_cold_white(0)
             # Spotlight gets its own, much wider brightness swing than the
             # strobe fixture's dimmer_level so quiet vs loud beats are
             # actually visible instead of hovering near max.
