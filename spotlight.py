@@ -19,7 +19,20 @@ class Spotlight(BaseDMX):
 
     def set_brightness(self, value: int) -> None:
         """Set the master dimmer."""
+        value = max(0, min(255, value))
+        self.current_brightness = value
         self._send(0, value)
+
+    def fade_off(self, step: int = 12) -> None:
+        """Step brightness down toward 0 instead of cutting abruptly.
+
+        Call once per frame while fading; safe to keep calling once it
+        reaches 0. Strobing stops immediately so the fade reads as a
+        smooth dim rather than a flicker trailing off.
+        """
+        self.set_strobe(0)
+        new_brightness = max(0, self.current_brightness - step)
+        self.set_brightness(new_brightness)
 
     def set_strobe(self, value: int) -> None:
         """Set the strobe effect (0 = steady, higher = faster strobe)."""
@@ -36,8 +49,9 @@ class Spotlight(BaseDMX):
         self._send(2, value)
 
     def set_cold_white(self, value: int) -> None:
-        """Set the cold white channel."""
-        self._send(3, value)
+        """Set the cold white channel, capped to 66% of current brightness."""
+        cap = int(self.current_brightness * 0.66)
+        self._send(3, min(value, cap))
 
     def set_macro(self, value: int) -> None:
         """Set the macro run program (0 = manual/off)."""

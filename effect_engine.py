@@ -923,8 +923,7 @@ class StrobeEffectStrategy(EffectStrategy):
                 )
                 spotlight.random_color()
             else:
-                spotlight.set_brightness(0)
-                spotlight.set_strobe(0)
+                spotlight.fade_off()
         if laser:
             # Strobe: auto mode with punchy colour, dramatic presets.
             laser.set_mode("auto")
@@ -1021,8 +1020,7 @@ class AmbientEffectStrategy(EffectStrategy):
             strobe.set_dimmer(0)
             strobe.set_strobe(0)
         if spotlight:
-            spotlight.set_brightness(0)
-            spotlight.set_strobe(0)
+            spotlight.fade_off()
         if laser:
             now = time.time()
             if now - self._last_refresh > 1.25:
@@ -1106,8 +1104,7 @@ class SubtleEffectStrategy(EffectStrategy):
             strobe.set_dimmer(0)
             strobe.set_strobe(0)
         if spotlight:
-            spotlight.set_brightness(0)
-            spotlight.set_strobe(0)
+            spotlight.fade_off()
         if laser:
             if frame.rms > min_threshold * 1.2:
                 now = time.time()
@@ -1207,7 +1204,7 @@ class SilenceEffectStrategy(EffectStrategy):
             # Only turn off after a few seconds of silence, same as the
             # stinger - keep whatever effect was running before silence.
             if silence_duration >= 5.0:
-                spotlight.turn_off()
+                spotlight.fade_off()
         if laser:
             # Keep laser dimly visible even during silence.
             # Use auto mode so colour takes effect.
