@@ -270,10 +270,6 @@ class BeatEffectStrategy(EffectStrategy):
     priority = 100
     name = "beat"
 
-    def __init__(self):
-        super().__init__()
-        self._beat_count = 0
-
     def can_apply(
         self, frame: AudioFrame, thresholds: Thresholds, profile: ShowProfile
     ) -> bool:
@@ -292,7 +288,6 @@ class BeatEffectStrategy(EffectStrategy):
         rng: random.Random,
     ) -> None:
         logger.debug(f"BEAT TRIGGERED! RMS: {frame.rms:.1f}, Peak: {frame.peak:.1f}")
-        self._beat_count += 1
         strobe = devices.strobe
         eurolite_strobe = devices.eurolite_strobe
         spotlight = devices.spotlight
@@ -363,10 +358,6 @@ class BeatEffectStrategy(EffectStrategy):
                 eurolite_strobe.set_sound_control(rng.randint(60, 130))
         if spotlight:
             spotlight.random_color()
-            if self._beat_count % 2 == 0:
-                # Drop the cold/blue channel every other beat for an
-                # alternating warm/cool pulse.
-                spotlight.set_cold_white(0)
             # Spotlight gets its own, much wider brightness swing than the
             # strobe fixture's dimmer_level so quiet vs loud beats are
             # actually visible instead of hovering near max.
@@ -1244,6 +1235,10 @@ class EffectEngine:
     def __init__(self, profile: ShowProfile) -> None:
         self.profile = profile
         self.last_effect_type: Optional[str] = None
+        # Toggled on every beat so the spotlight's cold/blue channel can be
+        # suppressed for a whole beat interval (not just one audio frame).
+        self._beat_count = 0
+        self._spotlight_blue_off = False
         # Dedicated RNG for repeatable behaviour under a fixed seed.
         if self.profile.random_seed is not None:
             self._rng = random.Random(self.profile.random_seed)
@@ -1288,6 +1283,11 @@ class EffectEngine:
         ):
             now = time.time()
             logger.debug(f"Beat latency: {now - frame.timestamp:.3f}s")
+            # Toggle once per beat, not per audio frame, so the spotlight's
+            # cold/blue channel stays suppressed for the whole beat
+            # interval instead of a single ~25ms frame.
+            self._beat_count += 1
+            self._spotlight_blue_off = self._beat_count % 2 == 0
         for strategy in self.strategies:
             if strategy.can_apply(frame, thresholds, self.profile):
                 strategy.apply(devices, frame, thresholds, self.profile, self._rng)
@@ -1298,6 +1298,12 @@ class EffectEngine:
                     for s in self.strategies:
                         if isinstance(s, SilenceEffectStrategy):
                             s.silence_start_time = None
+
+                # Enforce the beat-alternating blue suppression regardless
+                # of which strategy just ran, so it isn't immediately
+                # undone by the next non-beat frame's color choice.
+                if devices.spotlight and self._spotlight_blue_off:
+                    devices.spotlight.set_cold_white(0)
 
                 return self.last_effect_type
 
