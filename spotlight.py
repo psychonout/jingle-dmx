@@ -54,8 +54,8 @@ class Spotlight(BaseDMX):
         # hardware's "full on"/"no function" plateaus.
         self._send(1, 64 + int(min(255, value) / 255 * 31))
 
-    def set_warm_white(self, value: int) -> None:
-        """Set the warm white channel.
+    def set_red(self, value: int) -> None:
+        """Set the warm white channel (used as this fixture's "red").
 
         This fixture's warm LEDs read visibly dimmer than the cold ones at
         the same DMX value, so boost the warm output to compensate.
@@ -90,7 +90,7 @@ class Spotlight(BaseDMX):
 
         warm = min(255, int(red + green * 0.2 + white * 0.5))
         cold = min(255, int(blue * 0.8 + green * 0.2 + white * 0.5))
-        self.set_warm_white(warm)
+        self.set_red(warm)
         self.set_cold_white(cold)
         self.current_color = (red, green, blue, white)
 

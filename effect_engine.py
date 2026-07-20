@@ -1308,7 +1308,7 @@ class EffectEngine:
                     if self._spotlight_blue_off:
                         devices.spotlight.set_cold_white(0)
                     if self._spotlight_red_off:
-                        devices.spotlight.set_warm_white(0)
+                        devices.spotlight.set_red(0)
                     devices.spotlight.set_strobe(180)
 
                 return self.last_effect_type
