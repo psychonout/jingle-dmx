@@ -55,8 +55,12 @@ class Spotlight(BaseDMX):
         self._send(1, 64 + int(min(255, value) / 255 * 31))
 
     def set_warm_white(self, value: int) -> None:
-        """Set the warm white channel."""
-        self._send(2, value)
+        """Set the warm white channel.
+
+        This fixture's warm LEDs read visibly dimmer than the cold ones at
+        the same DMX value, so boost the warm output to compensate.
+        """
+        self._send(2, min(255, int(value * 1.3)))
 
     def set_cold_white(self, value: int) -> None:
         """Set the cold white channel, capped to 66% of current brightness."""

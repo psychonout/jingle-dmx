@@ -1299,12 +1299,17 @@ class EffectEngine:
                 # Enforce the beat-alternating blue/red suppression
                 # regardless of which strategy just ran, so it isn't
                 # immediately undone by the next non-beat frame's color
-                # choice.
-                if devices.spotlight:
+                # choice. Force an active strobe during the suppressed
+                # beat too, so the drop reads as a flicker like the other
+                # fixtures rather than a flat color dip.
+                if devices.spotlight and (
+                    self._spotlight_blue_off or self._spotlight_red_off
+                ):
                     if self._spotlight_blue_off:
                         devices.spotlight.set_cold_white(0)
                     if self._spotlight_red_off:
                         devices.spotlight.set_warm_white(0)
+                    devices.spotlight.set_strobe(180)
 
                 return self.last_effect_type
 
