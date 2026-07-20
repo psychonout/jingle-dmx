@@ -11,6 +11,8 @@ case "$1" in
         sudo systemctl stop jingle-dmx
         ;;
     restart)
+        echo "Pulling latest changes..."
+        git -C /home/pi/jingle-dmx pull
         echo "Restarting jingle-dmx service..."
         sudo systemctl restart jingle-dmx
         ;;

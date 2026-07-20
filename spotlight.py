@@ -34,6 +34,16 @@ class Spotlight(BaseDMX):
         new_brightness = max(0, self.current_brightness - step)
         self.set_brightness(new_brightness)
 
+    def fade_in(self, target: int, step: int = 40) -> None:
+        """Step brightness up toward *target* instead of snapping instantly.
+
+        Only smooths the rising edge - if already at or above target it
+        holds steady immediately, so this is safe to call every frame in
+        place of set_brightness().
+        """
+        new_brightness = min(target, self.current_brightness + step)
+        self.set_brightness(new_brightness)
+
     def set_strobe(self, value: int) -> None:
         """Set the strobe effect (0 = steady, higher = faster strobe)."""
         if value <= 0:

@@ -5,9 +5,21 @@ class Strobe(BaseDMX):
     def __init__(self, dmx_channel: int = 11) -> None:
         """Initialize Strobe with specific device index"""
         super().__init__(dmx_channel, num_channels=7)
+        self.current_dimmer = 0
 
     def set_dimmer(self, value: int) -> None:
+        value = max(0, min(255, value))
+        self.current_dimmer = value
         self._send(0, value)
+
+    def fade_off(self, step: int = 12) -> None:
+        """Step dimmer down toward 0 instead of cutting abruptly."""
+        self.set_strobe(0)
+        self.set_dimmer(max(0, self.current_dimmer - step))
+
+    def fade_in(self, target: int, step: int = 40) -> None:
+        """Step dimmer up toward *target* instead of snapping instantly."""
+        self.set_dimmer(min(target, self.current_dimmer + step))
 
     def set_strobe(self, value: int) -> None:
         """

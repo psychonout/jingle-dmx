@@ -325,11 +325,11 @@ class BeatEffectStrategy(EffectStrategy):
             # Beats: favour warm/yellowish white rather than cold white.
             strobe.set_warm_white(self._cap(_DIMMER_HIGH, profile.max_strobe_level))
             if is_bass_beat:
-                strobe.set_dimmer(dimmer_level)
+                strobe.fade_in(dimmer_level)
                 strobe.set_strobe(strobe_level)
                 strobe.set_color(90)
             else:
-                strobe.set_dimmer(
+                strobe.fade_in(
                     self._cap(int(dimmer_level * 0.9), profile.max_dimmer_level)
                 )
                 strobe.set_strobe(
@@ -361,7 +361,7 @@ class BeatEffectStrategy(EffectStrategy):
             # Spotlight gets its own, much wider brightness swing than the
             # strobe fixture's dimmer_level so quiet vs loud beats are
             # actually visible instead of hovering near max.
-            spotlight.set_brightness(
+            spotlight.fade_in(
                 self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
             )
             # Phrase = steady on; bar = slow flash; normal = medium flash.
@@ -515,8 +515,7 @@ class FrequencyEffectStrategy(EffectStrategy):
 
         if strobe:
             # Bass: smooth pulse – no strobe flicker
-            strobe.set_dimmer(0)
-            strobe.set_strobe(0)
+            strobe.fade_off()
         if spotlight:
             spotlight.set_color_rgb(
                 rng.randint(200, 255),
@@ -524,7 +523,7 @@ class FrequencyEffectStrategy(EffectStrategy):
                 rng.randint(0, 50),
                 rng.randint(0, 50),
             )
-            spotlight.set_brightness(
+            spotlight.fade_in(
                 self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
             )
             spotlight.set_strobe(rng.randint(20, 50))
@@ -579,8 +578,7 @@ class FrequencyEffectStrategy(EffectStrategy):
 
         if strobe:
             # Mid: smooth sweep – no strobe flicker
-            strobe.set_dimmer(0)
-            strobe.set_strobe(0)
+            strobe.fade_off()
         if spotlight:
             spotlight.set_color_rgb(
                 rng.randint(0, 100),
@@ -588,7 +586,7 @@ class FrequencyEffectStrategy(EffectStrategy):
                 rng.randint(100, 255),
                 rng.randint(0, 50),
             )
-            spotlight.set_brightness(
+            spotlight.fade_in(
                 self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
             )
             spotlight.set_strobe(rng.randint(30, 60))
@@ -645,7 +643,7 @@ class FrequencyEffectStrategy(EffectStrategy):
 
         if strobe:
             strobe.set_warm_white(self._cap(_DIMMER_MED, profile.max_strobe_level))
-            strobe.set_dimmer(
+            strobe.fade_in(
                 self._cap(int(_DIMMER_MED + intensity * 75), profile.max_dimmer_level)
             )
             strobe.set_strobe(
@@ -659,7 +657,7 @@ class FrequencyEffectStrategy(EffectStrategy):
                 rng.randint(200, 255),
                 rng.randint(100, 255),
             )
-            spotlight.set_brightness(
+            spotlight.fade_in(
                 self._cap(int(70 + intensity * 185), profile.max_dimmer_level)
             )
             spotlight.set_strobe(rng.randint(50, 80))
@@ -730,7 +728,7 @@ class MegaComboEffectStrategy(EffectStrategy):
         laser = devices.laser
         stinger = devices.stinger
         if strobe:
-            strobe.set_dimmer(
+            strobe.fade_in(
                 self._cap(int(_DIMMER_MED + intensity * 75), profile.max_dimmer_level)
             )
             strobe.set_strobe(
@@ -742,7 +740,7 @@ class MegaComboEffectStrategy(EffectStrategy):
             spotlight.random_color()
             # Mega combo stays the brightest tier overall, but still swings
             # with intensity instead of sitting in a narrow near-max band.
-            spotlight.set_brightness(
+            spotlight.fade_in(
                 self._cap(int(140 + intensity * 115), profile.max_dimmer_level)
             )
             spotlight.set_strobe(self._cap(_DIMMER_FULL, profile.max_strobe_level))
@@ -808,13 +806,13 @@ class ComboEffectStrategy(EffectStrategy):
             strobe.set_warm_white(
                 self._cap(int(150 + (intensity * 105)), profile.max_strobe_level)
             )
-            strobe.set_dimmer(
+            strobe.fade_in(
                 self._cap(int(150 + (intensity * 105)), profile.max_dimmer_level)
             )
             strobe.set_strobe(self._cap(rng.randint(32, 95), profile.max_strobe_level))
         if spotlight:
             spotlight.random_color()
-            spotlight.set_brightness(
+            spotlight.fade_in(
                 self._cap(int(90 + (intensity * 165)), profile.max_dimmer_level)
             )
             spotlight.set_strobe(
@@ -900,7 +898,7 @@ class StrobeEffectStrategy(EffectStrategy):
                     profile.max_strobe_level,
                 )
             )
-            strobe.set_dimmer(self._cap(255, profile.max_dimmer_level))
+            strobe.fade_in(self._cap(255, profile.max_dimmer_level))
             strobe.set_strobe(
                 self._cap(
                     int(150 + (effect_intensity * 105)), profile.max_strobe_level
@@ -910,7 +908,7 @@ class StrobeEffectStrategy(EffectStrategy):
             if effect_intensity >= 1.1:
                 # Scale with how hard the hit is, rather than always maxing out.
                 spotlight_intensity = min(1.0, (effect_intensity - 1.1) / 0.4)
-                spotlight.set_brightness(
+                spotlight.fade_in(
                     self._cap(
                         int(70 + spotlight_intensity * 185), profile.max_dimmer_level
                     )
@@ -1017,8 +1015,7 @@ class AmbientEffectStrategy(EffectStrategy):
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
         if strobe:
-            strobe.set_dimmer(0)
-            strobe.set_strobe(0)
+            strobe.fade_off()
         if spotlight:
             spotlight.fade_off()
         if laser:
@@ -1101,8 +1098,7 @@ class SubtleEffectStrategy(EffectStrategy):
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
         if strobe:
-            strobe.set_dimmer(0)
-            strobe.set_strobe(0)
+            strobe.fade_off()
         if spotlight:
             spotlight.fade_off()
         if laser:
@@ -1193,8 +1189,7 @@ class SilenceEffectStrategy(EffectStrategy):
         eurolite_strobe = devices.eurolite_strobe
 
         if strobe:
-            strobe.set_dimmer(0)
-            strobe.set_strobe(0)
+            strobe.fade_off()
             strobe.set_warm_white(0)
             strobe.set_cold_white(0)
             strobe.set_color(0)
