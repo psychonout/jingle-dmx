@@ -1235,6 +1235,9 @@ class EffectEngine:
         # cross-rhythms against the blue toggle (3-against-2) rather than
         # always flipping in lockstep with it.
         self._spotlight_red_off = False
+        # Counts every processed frame so the suppressed color can be
+        # manually flickered on/off (see apply_effects below).
+        self._frame_count = 0
         # Dedicated RNG for repeatable behaviour under a fixed seed.
         if self.profile.random_seed is not None:
             self._rng = random.Random(self.profile.random_seed)
@@ -1271,6 +1274,8 @@ class EffectEngine:
     ) -> Optional[str]:
         """Apply effects for a frame."""
 
+        self._frame_count += 1
+
         # Log low-latency metric if beat detected
         if (
             frame.beat_detected
@@ -1299,17 +1304,19 @@ class EffectEngine:
                 # Enforce the beat-alternating blue/red suppression
                 # regardless of which strategy just ran, so it isn't
                 # immediately undone by the next non-beat frame's color
-                # choice. Force an active strobe during the suppressed
-                # beat too, so the drop reads as a flicker like the other
-                # fixtures rather than a flat color dip.
+                # choice. This fixture has no per-channel strobe - the
+                # shared hardware Strobe channel would flicker whichever
+                # color stays nonzero, not the suppressed one - so flicker
+                # the suppressed channel manually by toggling it every
+                # couple of frames instead of holding it at a flat zero.
                 if devices.spotlight and (
                     self._spotlight_blue_off or self._spotlight_red_off
                 ):
+                    flicker_on = (self._frame_count // 2) % 2 == 0
                     if self._spotlight_blue_off:
-                        devices.spotlight.set_cold_white(0)
+                        devices.spotlight.set_cold_white(220 if flicker_on else 0)
                     if self._spotlight_red_off:
-                        devices.spotlight.set_red(0)
-                    devices.spotlight.set_strobe(180)
+                        devices.spotlight.set_red(220 if flicker_on else 0)
 
                 return self.last_effect_type
 
