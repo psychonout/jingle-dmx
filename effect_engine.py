@@ -32,32 +32,42 @@ STINGER_LASER_SLOW_SPEED = 85
 # ---------------------------------------------------------------------------
 # Laser speed profiles – adjust these to change laser movement speed globally.
 # Each profile has a base speed and rotation speed (min, max tuples).
+#
+# laser.speed() only accepts 192-255 and laser.rotation_speed() only accepts
+# 128-255 (CH8 and CH3 are split into sub-ranges by the hardware - see
+# laser.py). Every value below used to be well under those floors, so every
+# call was silently clamped to exactly the same floor value - the laser's
+# speed and rotation never actually varied between strategies. These add
+# the required floor back in.
 # ---------------------------------------------------------------------------
-LASER_SPEED_BEAT_FAST = (50, 58)            # Fast beat effects
-LASER_SPEED_BEAT_NORMAL = (46, 55)          # Normal beat effects
-LASER_SPEED_BEAT_BASE = 46                  # Used with intensity multiplier
+_LASER_SPEED_FLOOR = 192
+_LASER_ROTATION_FLOOR = 128
 
-LASER_SPEED_BASS = (46, 58)                 # Bass-heavy effects
-LASER_ROTATION_BASS = (40, 65)              # Bass rotation
+LASER_SPEED_BEAT_FAST = (_LASER_SPEED_FLOOR + 50, _LASER_SPEED_FLOOR + 58)
+LASER_SPEED_BEAT_NORMAL = (_LASER_SPEED_FLOOR + 46, _LASER_SPEED_FLOOR + 55)
+LASER_SPEED_BEAT_BASE = _LASER_SPEED_FLOOR + 46  # Used with intensity multiplier
 
-LASER_SPEED_MID = (46, 60)                  # Mid-range effects
-LASER_ROTATION_MID = (30, 55)               # Mid rotation
+LASER_SPEED_BASS = (_LASER_SPEED_FLOOR + 46, _LASER_SPEED_FLOOR + 58)
+LASER_ROTATION_BASS = (_LASER_ROTATION_FLOOR + 40, _LASER_ROTATION_FLOOR + 65)
 
-LASER_SPEED_HIGH = (46, 55)                 # High-energy effects
-LASER_ROTATION_HIGH = (50, 78)              # High rotation
+LASER_SPEED_MID = (_LASER_SPEED_FLOOR + 46, _LASER_SPEED_FLOOR + 60)
+LASER_ROTATION_MID = (_LASER_ROTATION_FLOOR + 30, _LASER_ROTATION_FLOOR + 55)
 
-LASER_SPEED_MEGA_COMBO = 50                 # Mega combo base (+ intensity * 15)
-LASER_ROTATION_MEGA = (60, 78)              # Mega combo rotation
+LASER_SPEED_HIGH = (_LASER_SPEED_FLOOR + 46, _LASER_SPEED_FLOOR + 55)
+LASER_ROTATION_HIGH = (_LASER_ROTATION_FLOOR + 50, _LASER_ROTATION_FLOOR + 78)
 
-LASER_SPEED_COMBO = 46                      # Combo base (+ intensity * 20)
-LASER_ROTATION_COMBO = (40, 70)             # Combo rotation
+LASER_SPEED_MEGA_COMBO = _LASER_SPEED_FLOOR + 50  # Mega combo base (+ intensity * 15)
+LASER_ROTATION_MEGA = (_LASER_ROTATION_FLOOR + 60, _LASER_ROTATION_FLOOR + 78)
 
-LASER_SPEED_STROBE = 46                     # Strobe effect
-LASER_ROTATION_STROBE = (50, 78)            # Strobe rotation
+LASER_SPEED_COMBO = _LASER_SPEED_FLOOR + 46  # Combo base (+ intensity * 20)
+LASER_ROTATION_COMBO = (_LASER_ROTATION_FLOOR + 40, _LASER_ROTATION_FLOOR + 70)
 
-LASER_SPEED_AMBIENT = 46                    # Ambient/subtle
-LASER_ROTATION_AMBIENT_ACTIVE = (20, 40)   # Ambient rotation (active)
-LASER_ROTATION_AMBIENT_SUBTLE = (15, 35)   # Ambient rotation (subtle)
+LASER_SPEED_STROBE = _LASER_SPEED_FLOOR + 46  # Strobe effect
+LASER_ROTATION_STROBE = (_LASER_ROTATION_FLOOR + 50, _LASER_ROTATION_FLOOR + 78)
+
+LASER_SPEED_AMBIENT = _LASER_SPEED_FLOOR + 46  # Ambient/subtle
+LASER_ROTATION_AMBIENT_ACTIVE = (_LASER_ROTATION_FLOOR + 20, _LASER_ROTATION_FLOOR + 40)
+LASER_ROTATION_AMBIENT_SUBTLE = (_LASER_ROTATION_FLOOR + 15, _LASER_ROTATION_FLOOR + 35)
 
 # ---------------------------------------------------------------------------
 # Named DMX intensity bands – replaces bare magic numbers in effect logic.
@@ -1238,6 +1248,10 @@ class EffectEngine:
         # Counts every processed frame so the suppressed color can be
         # manually flickered on/off (see apply_effects below).
         self._frame_count = 0
+        # Rolled fresh each beat: occasionally kill the laser for a beat,
+        # or occasionally push its speed/rotation to max.
+        self._laser_off = False
+        self._laser_speed_boost = False
         # Dedicated RNG for repeatable behaviour under a fixed seed.
         if self.profile.random_seed is not None:
             self._rng = random.Random(self.profile.random_seed)
@@ -1290,6 +1304,12 @@ class EffectEngine:
             self._beat_count += 1
             self._spotlight_blue_off = self._beat_count % 2 == 0
             self._spotlight_red_off = self._beat_count % 3 == 0
+            # Re-roll every beat: ~12% chance the laser goes dark for the
+            # beat, otherwise ~25% chance it gets pushed to max speed.
+            self._laser_off = self._rng.random() < 0.12
+            self._laser_speed_boost = (
+                not self._laser_off and self._rng.random() < 0.25
+            )
         for strategy in self.strategies:
             if strategy.can_apply(frame, thresholds, self.profile):
                 strategy.apply(devices, frame, thresholds, self.profile, self._rng)
@@ -1317,6 +1337,16 @@ class EffectEngine:
                         devices.spotlight.set_cold_white(220 if flicker_on else 0)
                     if self._spotlight_red_off:
                         devices.spotlight.set_red(220 if flicker_on else 0)
+
+                # Enforce the laser's occasional off/speed-boost beats the
+                # same way - after whichever strategy ran, so it isn't
+                # immediately overwritten on the next frame.
+                if devices.laser:
+                    if self._laser_off:
+                        devices.laser.set_mode("off")
+                    elif self._laser_speed_boost:
+                        devices.laser.speed(255)
+                        devices.laser.rotation_speed(255)
 
                 return self.last_effect_type
 
