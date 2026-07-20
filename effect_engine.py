@@ -1231,6 +1231,10 @@ class EffectEngine:
         # suppressed for a whole beat interval (not just one audio frame).
         self._beat_count = 0
         self._spotlight_blue_off = False
+        # Warm/red drops out every 3rd beat instead of every 2nd, so it
+        # cross-rhythms against the blue toggle (3-against-2) rather than
+        # always flipping in lockstep with it.
+        self._spotlight_red_off = False
         # Dedicated RNG for repeatable behaviour under a fixed seed.
         if self.profile.random_seed is not None:
             self._rng = random.Random(self.profile.random_seed)
@@ -1280,6 +1284,7 @@ class EffectEngine:
             # interval instead of a single ~25ms frame.
             self._beat_count += 1
             self._spotlight_blue_off = self._beat_count % 2 == 0
+            self._spotlight_red_off = self._beat_count % 3 == 0
         for strategy in self.strategies:
             if strategy.can_apply(frame, thresholds, self.profile):
                 strategy.apply(devices, frame, thresholds, self.profile, self._rng)
@@ -1291,11 +1296,15 @@ class EffectEngine:
                         if isinstance(s, SilenceEffectStrategy):
                             s.silence_start_time = None
 
-                # Enforce the beat-alternating blue suppression regardless
-                # of which strategy just ran, so it isn't immediately
-                # undone by the next non-beat frame's color choice.
-                if devices.spotlight and self._spotlight_blue_off:
-                    devices.spotlight.set_cold_white(0)
+                # Enforce the beat-alternating blue/red suppression
+                # regardless of which strategy just ran, so it isn't
+                # immediately undone by the next non-beat frame's color
+                # choice.
+                if devices.spotlight:
+                    if self._spotlight_blue_off:
+                        devices.spotlight.set_cold_white(0)
+                    if self._spotlight_red_off:
+                        devices.spotlight.set_warm_white(0)
 
                 return self.last_effect_type
 
