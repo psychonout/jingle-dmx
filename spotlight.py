@@ -84,7 +84,7 @@ class Spotlight(BaseDMX):
         self.set_macro(0)
         self.set_macro_speed(0)
 
-        warm = min(255, int(red * 0.8 + green * 0.2 + white * 0.5))
+        warm = min(255, int(red + green * 0.2 + white * 0.5))
         cold = min(255, int(blue * 0.8 + green * 0.2 + white * 0.5))
         self.set_warm_white(warm)
         self.set_cold_white(cold)
