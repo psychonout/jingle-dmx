@@ -21,6 +21,7 @@ from laser import (
     Laser,
 )
 from light_strip import VUMeter
+from smoke_bubble_machine import SmokeBubbleMachine
 from spotlight import Spotlight
 from stinger import StingerII
 from strobe import Strobe
@@ -81,6 +82,14 @@ _STROBE_MED: int = 130  # Mid-tempo pulse
 _STROBE_SLOW: int = 80  # Slow sweep
 _EUROLITE_COLOR_MIN: int = 90
 _EUROLITE_COLOR_MAX: int = 165
+
+# ---------------------------------------------------------------------------
+# Smoke machine bursts are gated centrally (see EffectEngine.apply_effects)
+# rather than per-strategy, since fog fluid/heat make it a scarce resource
+# unlike the always-on bubble wheel and LEDs on the same fixture.
+# ---------------------------------------------------------------------------
+_SMOKE_BURST_SECONDS: float = 3.0
+_SMOKE_MIN_INTERVAL_SECONDS: float = 240.0
 
 # ---------------------------------------------------------------------------
 # Laser colour palette — uses the hardware's monochrome RGB segments.
@@ -145,6 +154,7 @@ class Devices:
     stinger: Optional[StingerII]
     vu_meter: Optional[VUMeter] | None = None
     eurolite_strobe: Optional[EuroliteStrobe] = None
+    smoke_machine: Optional[SmokeBubbleMachine] = None
 
 
 @dataclass
@@ -303,6 +313,7 @@ class BeatEffectStrategy(EffectStrategy):
         spotlight = devices.spotlight
         laser = devices.laser
         stinger = devices.stinger
+        smoke_machine = devices.smoke_machine
 
         total_energy = frame.total_energy or (
             frame.bass_energy + frame.mid_energy + frame.high_energy
@@ -445,6 +456,17 @@ class BeatEffectStrategy(EffectStrategy):
                     direction="cw",
                     speed=rng.randint(35, 60),
                 )
+        if smoke_machine:
+            smoke_machine.random_color()
+            smoke_machine.set_dimmer(
+                self._cap(int(140 + intensity * 115), profile.max_smoke_led_level)
+            )
+            # Phrase/bar hits get a fast flicker; regular beats stay steady.
+            if frame.on_phrase or frame.on_bar:
+                smoke_machine.set_strobe(rng.randint(90, 170))
+            else:
+                smoke_machine.set_strobe(0)
+            smoke_machine.set_bubble_speed(rng.randint(150, 255))
 
 
 class FrequencyEffectStrategy(EffectStrategy):
@@ -522,6 +544,7 @@ class FrequencyEffectStrategy(EffectStrategy):
         spotlight = devices.spotlight
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
+        smoke_machine = devices.smoke_machine
 
         if strobe:
             # Bass: smooth pulse – no strobe flicker
@@ -570,6 +593,16 @@ class FrequencyEffectStrategy(EffectStrategy):
             )
             # Placeholder colour; overridden by proportional blend in apply().
             eurolite_strobe.set_color(120, rng.randint(0, 20), 0)
+        if smoke_machine:
+            # Bass: warm red/orange, no strobe, moderate bubble speed.
+            smoke_machine.set_color_rgb(
+                rng.randint(180, 255), rng.randint(0, 60), 0
+            )
+            smoke_machine.set_dimmer(
+                self._cap(int(_DIMMER_MED + intensity * 75), profile.max_smoke_led_level)
+            )
+            smoke_machine.set_strobe(0)
+            smoke_machine.set_bubble_speed(int(90 + intensity * 90))
 
     def _mid_heavy_effects(
         self,
@@ -585,6 +618,7 @@ class FrequencyEffectStrategy(EffectStrategy):
         spotlight = devices.spotlight
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
+        smoke_machine = devices.smoke_machine
 
         if strobe:
             # Mid: smooth sweep – no strobe flicker
@@ -635,6 +669,16 @@ class FrequencyEffectStrategy(EffectStrategy):
             eurolite_strobe.set_color(
                 rng.randint(60, 120), rng.randint(0, 40), rng.randint(80, 140)
             )
+        if smoke_machine:
+            # Mid: cool green/teal, no strobe, moderate bubble speed.
+            smoke_machine.set_color_rgb(
+                0, rng.randint(150, 255), rng.randint(100, 180)
+            )
+            smoke_machine.set_dimmer(
+                self._cap(int(_DIMMER_MED + intensity * 75), profile.max_smoke_led_level)
+            )
+            smoke_machine.set_strobe(0)
+            smoke_machine.set_bubble_speed(int(90 + intensity * 90))
 
     def _high_heavy_effects(
         self,
@@ -650,6 +694,7 @@ class FrequencyEffectStrategy(EffectStrategy):
         spotlight = devices.spotlight
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
+        smoke_machine = devices.smoke_machine
 
         if strobe:
             strobe.set_warm_white(self._cap(_DIMMER_MED, profile.max_strobe_level))
@@ -707,6 +752,16 @@ class FrequencyEffectStrategy(EffectStrategy):
             )
             # Placeholder colour; overridden by proportional blend in apply().
             eurolite_strobe.set_color(rng.randint(0, 20), rng.randint(0, 20), 140)
+        if smoke_machine:
+            # High: bright white/blue, light flicker, fast bubble speed.
+            smoke_machine.set_color_rgb(
+                rng.randint(180, 255), rng.randint(180, 255), 255
+            )
+            smoke_machine.set_dimmer(
+                self._cap(int(_DIMMER_MED + intensity * 75), profile.max_smoke_led_level)
+            )
+            smoke_machine.set_strobe(rng.randint(40, 90))
+            smoke_machine.set_bubble_speed(int(140 + intensity * 100))
 
 
 class MegaComboEffectStrategy(EffectStrategy):
@@ -737,6 +792,7 @@ class MegaComboEffectStrategy(EffectStrategy):
         spotlight = devices.spotlight
         laser = devices.laser
         stinger = devices.stinger
+        smoke_machine = devices.smoke_machine
         if strobe:
             strobe.fade_in(
                 self._cap(int(_DIMMER_MED + intensity * 75), profile.max_dimmer_level)
@@ -783,6 +839,17 @@ class MegaComboEffectStrategy(EffectStrategy):
                 ),
             )
             stinger.set_moonflower_rotation("ccw", speed=int(60 + intensity * 10))
+        if smoke_machine:
+            # Mega combo: brightest tier, full random colour, fast strobe
+            # and bubble wheel - the fixture's most intense state.
+            smoke_machine.random_color()
+            smoke_machine.set_dimmer(
+                self._cap(int(180 + intensity * 75), profile.max_smoke_led_level)
+            )
+            smoke_machine.set_strobe(
+                self._cap(int(150 + intensity * 100), profile.max_smoke_led_level)
+            )
+            smoke_machine.set_bubble_speed(255)
 
 
 class ComboEffectStrategy(EffectStrategy):
@@ -812,6 +879,7 @@ class ComboEffectStrategy(EffectStrategy):
         spotlight = devices.spotlight
         laser = devices.laser
         stinger = devices.stinger
+        smoke_machine = devices.smoke_machine
         if strobe:
             strobe.set_warm_white(
                 self._cap(int(150 + (intensity * 105)), profile.max_strobe_level)
@@ -873,6 +941,17 @@ class ComboEffectStrategy(EffectStrategy):
                     rotation_raw=135,
                 )  # Light laser glow
                 stinger.set_moonflower_rotation("cw", speed=int(35 + intensity * 30))
+        if smoke_machine:
+            smoke_machine.random_color()
+            smoke_machine.set_dimmer(
+                self._cap(int(90 + (intensity * 165)), profile.max_smoke_led_level)
+            )
+            smoke_machine.set_strobe(
+                self._cap(int(rng.randint(32, 95)), profile.max_smoke_led_level)
+                if intensity > 0.5
+                else 0
+            )
+            smoke_machine.set_bubble_speed(int(120 + intensity * 135))
 
 
 class StrobeEffectStrategy(EffectStrategy):
@@ -901,6 +980,7 @@ class StrobeEffectStrategy(EffectStrategy):
         spotlight = devices.spotlight
         laser = devices.laser
         stinger = devices.stinger
+        smoke_machine = devices.smoke_machine
         if strobe:
             strobe.set_warm_white(
                 self._cap(
@@ -991,6 +1071,19 @@ class StrobeEffectStrategy(EffectStrategy):
                 stinger.set_moonflower_rotation(
                     "cw", speed=int(35 + effect_intensity * 30)
                 )
+        if smoke_machine:
+            smoke_machine.random_color()
+            smoke_machine.set_dimmer(
+                self._cap(int(150 + effect_intensity * 105), profile.max_smoke_led_level)
+            )
+            smoke_machine.set_strobe(
+                self._cap(
+                    int(150 + (effect_intensity * 105)), profile.max_smoke_led_level
+                )
+            )
+            smoke_machine.set_bubble_speed(
+                self._cap(int(150 + effect_intensity * 105), 255)
+            )
 
 
 class AmbientEffectStrategy(EffectStrategy):
@@ -1024,6 +1117,7 @@ class AmbientEffectStrategy(EffectStrategy):
         laser = devices.laser
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
+        smoke_machine = devices.smoke_machine
         if strobe:
             strobe.fade_off()
         if spotlight:
@@ -1074,6 +1168,17 @@ class AmbientEffectStrategy(EffectStrategy):
                 rng, brightness=_EUROLITE_COLOR_MIN
             )
             eurolite_strobe.set_color(red, green, blue)
+        if smoke_machine:
+            # Ambient: gentle cool colour, no strobe, slow bubble wheel.
+            smoke_machine.set_color_rgb(0, rng.randint(120, 200), rng.randint(180, 255))
+            smoke_machine.set_dimmer(
+                self._cap(
+                    int(90 + (frame.rms / min_threshold) * 40),
+                    profile.max_smoke_led_level,
+                )
+            )
+            smoke_machine.set_strobe(0)
+            smoke_machine.set_bubble_speed(rng.randint(60, 110))
 
 
 class SubtleEffectStrategy(EffectStrategy):
@@ -1107,6 +1212,7 @@ class SubtleEffectStrategy(EffectStrategy):
         laser = devices.laser
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
+        smoke_machine = devices.smoke_machine
         if strobe:
             strobe.fade_off()
         if spotlight:
@@ -1163,6 +1269,18 @@ class SubtleEffectStrategy(EffectStrategy):
                 eurolite_strobe.set_color(red, green, blue)
             else:
                 eurolite_strobe.close_gates()
+        if smoke_machine:
+            if frame.rms > min_threshold * 0.8:
+                # SUBTLE: dim cool colour, gentle bubble wheel, no strobe.
+                smoke_machine.set_color_rgb(
+                    0, rng.randint(100, 180), rng.randint(150, 220)
+                )
+                smoke_machine.set_dimmer(rng.randint(50, 90))
+                smoke_machine.set_strobe(0)
+                smoke_machine.set_bubble_speed(rng.randint(40, 80))
+            else:
+                smoke_machine.fade_off()
+                smoke_machine.set_bubble_speed(0)
 
 
 class SilenceEffectStrategy(EffectStrategy):
@@ -1197,6 +1315,7 @@ class SilenceEffectStrategy(EffectStrategy):
         laser = devices.laser
         stinger = devices.stinger
         eurolite_strobe = devices.eurolite_strobe
+        smoke_machine = devices.smoke_machine
 
         if strobe:
             strobe.fade_off()
@@ -1227,6 +1346,14 @@ class SilenceEffectStrategy(EffectStrategy):
         if eurolite_strobe:
             eurolite_strobe.close_gates()
 
+        if smoke_machine:
+            # Only fade the LEDs/bubble wheel off after a few seconds of
+            # silence, same as the spotlight/stinger above; smoke output
+            # itself is already handled centrally in apply_effects.
+            if silence_duration >= 5.0:
+                smoke_machine.fade_off()
+                smoke_machine.set_bubble_speed(0)
+
 
 class EffectEngine:
     """Centralized effect selection logic.
@@ -1252,6 +1379,11 @@ class EffectEngine:
         # or occasionally push its speed/rotation to max.
         self._laser_off = False
         self._laser_speed_boost = False
+        # Smoke bursts are rare "wow" moments (phrase boundaries / mega
+        # combos) gated by a cooldown so the fixture doesn't dump fog
+        # continuously - see the post-hoc block in apply_effects.
+        self._smoke_burst_until = 0.0
+        self._smoke_cooldown_until = 0.0
         # Dedicated RNG for repeatable behaviour under a fixed seed.
         if self.profile.random_seed is not None:
             self._rng = random.Random(self.profile.random_seed)
@@ -1347,6 +1479,30 @@ class EffectEngine:
                     elif self._laser_speed_boost:
                         devices.laser.speed(255)
                         devices.laser.rotation_speed(255)
+
+                # Smoke output is gated independently of whichever strategy
+                # just ran: it only fires on a phrase boundary or a mega
+                # combo hit, and only once the cooldown from the last burst
+                # has elapsed, since fog fluid/heat make it a scarce
+                # resource unlike the fixture's LEDs and bubble wheel.
+                if devices.smoke_machine:
+                    now = time.time()
+                    if (
+                        frame.rms > 0
+                        and (frame.on_phrase or strategy.name == "mega_combo")
+                        and now >= self._smoke_cooldown_until
+                    ):
+                        self._smoke_burst_until = now + _SMOKE_BURST_SECONDS
+                        self._smoke_cooldown_until = now + _SMOKE_MIN_INTERVAL_SECONDS
+
+                    if now < self._smoke_burst_until:
+                        devices.smoke_machine.set_smoke(
+                            self._cap(220, profile.max_smoke_level)
+                        )
+                        devices.smoke_machine.set_fan(200)
+                    else:
+                        devices.smoke_machine.set_smoke(0)
+                        devices.smoke_machine.set_fan(0)
 
                 return self.last_effect_type
 

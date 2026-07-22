@@ -29,6 +29,7 @@ class RuntimeControl:
             "use_stinger": device_config.use_stinger,
             "use_vu_meter": device_config.use_vu_meter,
             "use_eurolite_strobe": device_config.use_eurolite_strobe,
+            "use_smoke_machine": device_config.use_smoke_machine,
         }
         self._profile = replace(show_profile)
         self._master_intensity = 1.0
@@ -119,6 +120,10 @@ class RuntimeControl:
         profile.max_vu_level = self._clamp_level(profile.max_vu_level * scale)
         profile.max_eurolite_level = self._clamp_level(
             profile.max_eurolite_level * scale
+        )
+        profile.max_smoke_level = self._clamp_level(profile.max_smoke_level * scale)
+        profile.max_smoke_led_level = self._clamp_level(
+            profile.max_smoke_led_level * scale
         )
         return profile
 

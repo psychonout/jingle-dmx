@@ -101,6 +101,7 @@ def run_controller() -> None:
         use_stinger=True,
         use_vu_meter=True,
         use_eurolite_strobe=True,
+        use_smoke_machine=True,
     )
     profile = load_default_profile()
     runtime_control = RuntimeControl(config, profile)

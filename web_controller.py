@@ -26,6 +26,8 @@ class ProfileUpdate(BaseModel):
     max_laser_level: Optional[int] = Field(default=None, ge=0, le=255)
     max_vu_level: Optional[int] = Field(default=None, ge=0, le=255)
     max_eurolite_level: Optional[int] = Field(default=None, ge=0, le=255)
+    max_smoke_level: Optional[int] = Field(default=None, ge=0, le=255)
+    max_smoke_led_level: Optional[int] = Field(default=None, ge=0, le=255)
 
 
 class DeviceUpdate(BaseModel):
@@ -35,6 +37,7 @@ class DeviceUpdate(BaseModel):
     use_stinger: Optional[bool] = None
     use_vu_meter: Optional[bool] = None
     use_eurolite_strobe: Optional[bool] = None
+    use_smoke_machine: Optional[bool] = None
 
 
 class RuntimeUpdate(BaseModel):
@@ -263,7 +266,8 @@ _PAGE = """
       "use_spotlight",
       "use_stinger",
       "use_vu_meter",
-      "use_eurolite_strobe"
+      "use_eurolite_strobe",
+      "use_smoke_machine"
     ];
     const capsByDevice = {
       use_laser: "max_laser_level",
@@ -271,7 +275,8 @@ _PAGE = """
       use_spotlight: "max_dimmer_level",
       use_stinger: "max_uv_level",
       use_vu_meter: "max_vu_level",
-      use_eurolite_strobe: "max_eurolite_level"
+      use_eurolite_strobe: "max_eurolite_level",
+      use_smoke_machine: ["max_smoke_level", "max_smoke_led_level"]
     };
 
     function setStatus(msg, ok = true) {
@@ -337,22 +342,25 @@ _PAGE = """
       const capsDiv = document.getElementById("caps");
       capsDiv.innerHTML = "";
       deviceOrder.filter((k) => Object.prototype.hasOwnProperty.call(capsByDevice, k)).forEach((deviceKey) => {
-        const k = capsByDevice[deviceKey];
-        const row = document.createElement("div");
-        row.className = "row";
-        const val = state.profile[k] ?? 255;
-        row.innerHTML = `<label>${keyLabel(deviceKey)}</label><input type="number" min="0" max="255" value="${val}" />`;
-        row.querySelector("input").addEventListener("change", async (e) => {
-          const n = Math.max(0, Math.min(255, Number(e.target.value || 0)));
-          e.target.value = n;
-          try {
-            Object.assign(state, await call("PUT", "/api/profile", { [k]: n }));
-            setStatus("updated");
-          } catch (err) {
-            setStatus("update failed", false);
-          }
+        const keys = Array.isArray(capsByDevice[deviceKey]) ? capsByDevice[deviceKey] : [capsByDevice[deviceKey]];
+        keys.forEach((k) => {
+          const row = document.createElement("div");
+          row.className = "row";
+          const val = state.profile[k] ?? 255;
+          const label = keys.length > 1 ? keyLabel(k) : keyLabel(deviceKey);
+          row.innerHTML = `<label>${label}</label><input type="number" min="0" max="255" value="${val}" />`;
+          row.querySelector("input").addEventListener("change", async (e) => {
+            const n = Math.max(0, Math.min(255, Number(e.target.value || 0)));
+            e.target.value = n;
+            try {
+              Object.assign(state, await call("PUT", "/api/profile", { [k]: n }));
+              setStatus("updated");
+            } catch (err) {
+              setStatus("update failed", false);
+            }
+          });
+          capsDiv.appendChild(row);
         });
-        capsDiv.appendChild(row);
       });
     }
 

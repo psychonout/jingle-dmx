@@ -18,6 +18,7 @@ from laser import (
 )
 from light_strip import VUMeter
 from runtime_control import RuntimeControl
+from smoke_bubble_machine import SmokeBubbleMachine
 from spotlight import Spotlight
 from stinger import StingerII
 from strobe import Strobe
@@ -118,6 +119,7 @@ class LightShowController:
         stinger: Optional[StingerII],
         vu_meter: Optional[VUMeter],
         eurolite_strobe: Optional[EuroliteStrobe],
+        smoke_machine: Optional[SmokeBubbleMachine],
     ) -> None:
         if strobe:
             strobe.set_dimmer(0)
@@ -138,6 +140,8 @@ class LightShowController:
             vu_meter.reset()
         if eurolite_strobe:
             eurolite_strobe.close_gates()
+        if smoke_machine:
+            smoke_machine.turn_off()
 
     def _enforce_device_disables(
         self,
@@ -148,6 +152,7 @@ class LightShowController:
         stinger: Optional[StingerII],
         vu_meter: Optional[VUMeter],
         eurolite_strobe: Optional[EuroliteStrobe],
+        smoke_machine: Optional[SmokeBubbleMachine],
     ) -> None:
         if not flags.get("use_strobe", True) and strobe:
             strobe.set_dimmer(0)
@@ -165,6 +170,8 @@ class LightShowController:
             vu_meter.reset()
         if not flags.get("use_eurolite_strobe", True) and eurolite_strobe:
             eurolite_strobe.close_gates()
+        if not flags.get("use_smoke_machine", True) and smoke_machine:
+            smoke_machine.turn_off()
 
     # --- device lifecycle -------------------------------------------------
 
@@ -193,6 +200,11 @@ class LightShowController:
             eurolite_strobe = EuroliteStrobe(dmx_channel=44)
             eurolite_strobe.__enter__()
             self.devices["eurolite_strobe"] = eurolite_strobe
+
+        if self.config.use_smoke_machine:
+            smoke_machine = SmokeBubbleMachine(dmx_channel=55)
+            smoke_machine.__enter__()
+            self.devices["smoke_machine"] = smoke_machine
 
         if self.config.use_vu_meter:
             # Allow configuration of the VU color palette via environment variables
@@ -531,6 +543,7 @@ class LightShowController:
         stinger: Optional[StingerII] = self.devices.get("stinger")  # type: ignore[assignment]
         vu_meter: Optional[VUMeter] = self.devices.get("vu_meter")  # type: ignore[assignment]
         eurolite_strobe: Optional[EuroliteStrobe] = self.devices.get("eurolite_strobe")  # type: ignore[assignment]
+        smoke_machine: Optional[SmokeBubbleMachine] = self.devices.get("smoke_machine")  # type: ignore[assignment]
 
         if strobe:
             strobe.set_dimmer(0)
@@ -544,6 +557,11 @@ class LightShowController:
         if spotlight:
             spotlight.set_brightness(0)
             spotlight.set_strobe(0)
+
+        if smoke_machine:
+            # Base look: bubble wheel/LEDs off, fan idle, no smoke, manual
+            # control (auto program left at 0 - see fixture docstring).
+            smoke_machine.reset()
 
         if laser:
             laser.set_mode("auto")
@@ -648,6 +666,7 @@ class LightShowController:
                     stinger,
                     vu_meter,
                     eurolite_strobe,
+                    smoke_machine,
                 )
                 self.last_effect_type = "blackout"
                 time.sleep(self.effect_interval)
@@ -662,6 +681,7 @@ class LightShowController:
                 stinger,
                 vu_meter,
                 eurolite_strobe,
+                smoke_machine,
             )
 
             if vu_meter:
@@ -697,6 +717,11 @@ class LightShowController:
                 eurolite_strobe=(
                     eurolite_strobe
                     if device_flags.get("use_eurolite_strobe", True)
+                    else None
+                ),
+                smoke_machine=(
+                    smoke_machine
+                    if device_flags.get("use_smoke_machine", True)
                     else None
                 ),
             )
