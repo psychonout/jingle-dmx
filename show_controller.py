@@ -325,20 +325,20 @@ class LightShowController:
         elif is_loud:
             # Loud section: energetic patterns (dots/lines 0-127 with variety)
             base_pattern = (frame.beat_index * 16) % 128
-            pattern_speed = 220
+            pattern_speed = 240
         elif is_building:
             # Building energy: gradually shift from simple to complex
             base_pattern = 40 + int(frame.bass_energy * 2) % 60
-            pattern_speed = 200
+            pattern_speed = 225
         elif is_beat:
             # Regular beat: moderate pattern with beat-synced variety
             base_pattern = (frame.beat_index * 32) % 96
-            pattern_speed = 210
+            pattern_speed = 230
         else:
             # Idle/quiet: gentle morphing pattern to keep hardware healthy
             # Cycle slowly through low-number patterns (simpler = less jarring)
             base_pattern = int(current_time * 2) % 32
-            pattern_speed = 192  # Minimum for speed range
+            pattern_speed = 215
 
         # Color: map energy to colour — uses RGB segments (R 0-20, G 21-41, B 42-63)
         # and colour-mixing (64-127) / auto-cycle (128-192) ranges.
@@ -433,22 +433,22 @@ class LightShowController:
             spread = 14 + int(42 * energy_norm)
             if is_drop or is_beat:
                 kick_mag = 22 + int(22 * energy_norm)
-                kick_phase = current_time * 5.0 + (frame.beat_index * 0.9)
+                kick_phase = current_time * 7.5 + (frame.beat_index * 0.9)
                 self._laser_kick_h = math.sin(kick_phase) * kick_mag
                 self._laser_kick_v = math.cos(kick_phase * 0.93) * kick_mag
             self._laser_kick_h *= 0.86
             self._laser_kick_v *= 0.86
             desired_h = int(
                 63
-                + math.sin(current_time * (0.9 + energy_norm * 2.0)) * spread
+                + math.sin(current_time * (1.5 + energy_norm * 3.0)) * spread
                 + self._laser_kick_h
             )
             desired_v = int(
                 self.laser_circle_v_center
-                + math.cos(current_time * (0.75 + energy_norm * 1.8)) * spread
+                + math.cos(current_time * (1.25 + energy_norm * 2.6)) * spread
                 + self._laser_kick_v
             )
-            blend = 0.09 if is_silent else (0.48 if (is_drop or is_beat) else 0.24)
+            blend = 0.09 if is_silent else (0.6 if (is_drop or is_beat) else 0.34)
             self._laser_last_beat = is_beat
 
         else:
@@ -502,20 +502,20 @@ class LightShowController:
                 spread = 14 + int(42 * energy_norm)
                 if is_drop or is_beat:
                     kick_mag = 22 + int(22 * energy_norm)
-                    kick_phase = current_time * 5.0 + (frame.beat_index * 0.9)
+                    kick_phase = current_time * 7.5 + (frame.beat_index * 0.9)
                     self._laser_kick_h = math.sin(kick_phase) * kick_mag
                     self._laser_kick_v = math.cos(kick_phase * 0.93) * kick_mag
                 self._laser_kick_h *= 0.86
                 self._laser_kick_v *= 0.86
                 base_h = 63 + int(
-                    math.sin(current_time * (0.9 + energy_norm * 2.0)) * spread
+                    math.sin(current_time * (1.5 + energy_norm * 3.0)) * spread
                 )
                 base_v = 63 + int(
-                    math.cos(current_time * (0.75 + energy_norm * 1.8)) * spread
+                    math.cos(current_time * (1.25 + energy_norm * 2.6)) * spread
                 )
                 desired_h = int(base_h + self._laser_kick_h)
                 desired_v = int(base_v + self._laser_kick_v)
-                blend = 0.09 if is_silent else (0.48 if (is_drop or is_beat) else 0.24)
+                blend = 0.09 if is_silent else (0.6 if (is_drop or is_beat) else 0.34)
                 self._laser_last_beat = is_beat
 
             if self.laser_novelty_shape or is_drop or is_loud or is_beat:

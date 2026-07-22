@@ -206,7 +206,9 @@ class AdaptiveThresholds:
 
         # Set thresholds with minimum spacing
         new_min = max(10, base_threshold * 0.7)
-        new_strobe = max(new_min + 10, base_threshold * 1.0)
+        # Lower multiplier than min/combo so the strobe effect triggers
+        # more readily - it no longer needs a near-combo-level hit to fire.
+        new_strobe = max(new_min + 10, base_threshold * 0.8)
         new_combo = max(new_strobe + 10, base_threshold * 1.3)
 
         # Soft floor/ceiling to keep thresholds in a practical band
