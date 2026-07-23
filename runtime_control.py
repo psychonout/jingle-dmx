@@ -44,6 +44,9 @@ class RuntimeControl:
         # since a stale test from a previous session should never silently
         # re-apply itself on the next restart.
         self._channel_test: Optional[Dict[str, Any]] = None
+        # Live show telemetry, pushed by the show loop every frame - purely
+        # a readout for the web UI, never persisted or read back on load.
+        self._telemetry: Optional[Dict[str, Any]] = None
         self._load_state()
 
     def _load_state(self) -> None:
@@ -142,6 +145,14 @@ class RuntimeControl:
     def get_channel_test(self) -> Optional[Dict[str, Any]]:
         with self._lock:
             return self._channel_test_locked()
+
+    def update_telemetry(self, **fields: Any) -> None:
+        with self._lock:
+            self._telemetry = {**fields, "updated_at": time.time()}
+
+    def get_telemetry(self) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            return dict(self._telemetry) if self._telemetry else None
 
     def device_flags(self) -> Dict[str, bool]:
         with self._lock:

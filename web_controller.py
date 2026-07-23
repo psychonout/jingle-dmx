@@ -157,6 +157,10 @@ def create_app(runtime_control: RuntimeControl) -> FastAPI:
         )
         return runtime_control.state()
 
+    @app.get("/api/telemetry")
+    def get_telemetry() -> dict:
+        return runtime_control.get_telemetry() or {}
+
     @app.get("/api/device-channels")
     def get_device_channels() -> dict:
         return {
@@ -259,6 +263,16 @@ _PAGE = """
       display: inline-block; padding: 4px 9px; border-radius: 999px;
       font-size: 0.8rem; background: #17354a; color: #c3e1f8; border: 1px solid #2f5876;
     }
+    .meter {
+      height: 10px; border-radius: 6px; background: #0f1f2c;
+      border: 1px solid #3a5b73; overflow: hidden; margin: 4px 0 10px;
+      position: relative;
+    }
+    .meter-fill { height: 100%; background: var(--accent); transition: width 0.15s ease; }
+    .meter-mark {
+      position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn);
+    }
+    .telemetry-stale { color: var(--danger); }
   </style>
 </head>
 <body>
@@ -270,6 +284,13 @@ _PAGE = """
         <span class="status" id="status">loading...</span>
       </div>
       <div class="muted">Changes are applied live without restarting the show loop.</div>
+    </div>
+
+    <div class="card">
+      <h2>Live Status</h2>
+      <div id="telemetryBody">
+        <div class="muted">waiting for telemetry...</div>
+      </div>
     </div>
 
     <div class="grid">
@@ -510,6 +531,59 @@ _PAGE = """
       }
     }
 
+    function meterRow(label, value, reference) {
+      const pct = Math.max(0, Math.min(100, (value / reference) * 100));
+      return `
+        <div class="row"><label>${label}</label><span>${value.toFixed(1)}</span></div>
+        <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
+      `;
+    }
+
+    function renderTelemetry(t) {
+      const body = document.getElementById("telemetryBody");
+      if (!t || !t.updated_at) {
+        body.innerHTML = `<div class="muted">waiting for telemetry...</div>`;
+        return;
+      }
+
+      const age = Date.now() / 1000 - t.updated_at;
+      const stale = age > 3;
+
+      const flags = [];
+      if (t.beat_detected) flags.push("beat");
+      if (t.on_bar) flags.push("bar");
+      if (t.on_phrase) flags.push("phrase");
+      if (t.building_energy) flags.push("building");
+      if (t.energy_drop) flags.push("drop");
+
+      const reference = Math.max(1, t.combo_threshold * 1.3, t.rms, t.peak);
+
+      body.innerHTML = `
+        ${stale ? `<div class="telemetry-stale">stale - no update in ${age.toFixed(0)}s (is the show loop running?)</div>` : ""}
+        <div class="row"><label>Effect</label><span class="chip">${t.last_effect_type || "-"}</span></div>
+        ${meterRow("RMS", t.rms, reference)}
+        ${meterRow("Peak", t.peak, reference)}
+        <div class="row"><label>Thresholds</label>
+          <span class="muted">min ${t.min_threshold.toFixed(0)} / strobe ${t.strobe_threshold.toFixed(0)} / combo ${t.combo_threshold.toFixed(0)}</span>
+        </div>
+        <div class="row"><label>Pattern</label>
+          <span class="muted">${flags.length ? flags.join(", ") : "-"}</span>
+        </div>
+        <div class="row"><label>Smoke machine</label>
+          <span class="muted">${t.smoke_burst_active ? "bursting now" : `cooldown ${t.smoke_cooldown_remaining.toFixed(0)}s`}</span>
+        </div>
+      `;
+    }
+
+    async function loadTelemetry() {
+      try {
+        const t = await call("GET", "/api/telemetry");
+        renderTelemetry(t);
+      } catch (err) {
+        // Leave the last-known telemetry on screen rather than clearing it.
+      }
+    }
+
     async function loadState() {
       try {
         const fresh = await call("GET", "/api/state");
@@ -553,6 +627,8 @@ _PAGE = """
 
     loadDeviceChannels().then(loadState);
     setInterval(loadState, 2000);
+    loadTelemetry();
+    setInterval(loadTelemetry, 500);
   </script>
 </body>
 </html>

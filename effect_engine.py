@@ -1412,6 +1412,14 @@ class EffectEngine:
         """Return number of non-silence strategies available for variation."""
         return sum(1 for strategy in self.strategies if strategy.name != "silence")
 
+    def smoke_status(self) -> dict:
+        """Report the smoke machine's burst/cooldown state, for telemetry."""
+        now = time.time()
+        return {
+            "burst_active": now < self._smoke_burst_until,
+            "cooldown_remaining": max(0.0, self._smoke_cooldown_until - now),
+        }
+
     def apply_effects(
         self,
         frame: AudioFrame,

@@ -661,6 +661,24 @@ class LightShowController:
             self.effect_engine.profile = control_profile
             device_flags = self.runtime_control.device_flags()
 
+            def _push_telemetry(effect_type: Optional[str]) -> None:
+                smoke_status = self.effect_engine.smoke_status()
+                self.runtime_control.update_telemetry(
+                    rms=frame.rms,
+                    peak=frame.peak,
+                    beat_detected=frame.beat_detected,
+                    on_bar=frame.on_bar,
+                    on_phrase=frame.on_phrase,
+                    building_energy=frame.building_energy,
+                    energy_drop=frame.energy_drop,
+                    min_threshold=min_threshold,
+                    strobe_threshold=strobe_threshold,
+                    combo_threshold=combo_threshold,
+                    last_effect_type=effect_type,
+                    smoke_burst_active=smoke_status["burst_active"],
+                    smoke_cooldown_remaining=round(smoke_status["cooldown_remaining"], 1),
+                )
+
             if self.runtime_control.is_blackout():
                 self._blackout_all_devices(
                     laser,
@@ -672,6 +690,7 @@ class LightShowController:
                     smoke_machine,
                 )
                 self.last_effect_type = "blackout"
+                _push_telemetry("blackout")
                 time.sleep(self.effect_interval)
                 self.last_effect_time = current_time
                 continue
@@ -740,6 +759,7 @@ class LightShowController:
                 thresholds=thresholds,
                 devices=devices,
             )
+            _push_telemetry(self.last_effect_type)
 
             # Activate laser based on audio features (fallback since effect engine
             # may not fully drive the laser device).
