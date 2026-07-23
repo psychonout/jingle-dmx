@@ -8,12 +8,18 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Optional
 
-from config import DeviceConfig, ShowProfile
+from config import DeviceConfig, ShowProfile, get_profile
 
 # How long a manual channel test holds before releasing control back to the
 # show automatically, so a forgotten test tab can't silently freeze a
 # fixture mid-show.
 CHANNEL_TEST_HOLD_SECONDS: float = 20.0
+
+# Runtime-switchable laser shapes. "novelty" is deliberately excluded: it
+# also requires LASER_NOVELTY_SHAPE to be set for show_controller to
+# actually trace the star outline, so switching to it here wouldn't do
+# what a user would expect without also fixing that separate flag.
+LASER_SHAPES = ("circle", "random")
 
 
 class RuntimeControl:
@@ -40,6 +46,7 @@ class RuntimeControl:
         self._profile = replace(show_profile)
         self._master_intensity = 1.0
         self._blackout = False
+        self._laser_shape = os.getenv("LASER_SHAPE", "circle")
         # Manual channel test override - deliberately NOT persisted to disk,
         # since a stale test from a previous session should never silently
         # re-apply itself on the next restart.
@@ -69,6 +76,9 @@ class RuntimeControl:
                 0.0, min(1.0, float(runtime.get("master_intensity", 1.0)))
             )
             self._blackout = bool(runtime.get("blackout", False))
+            persisted_shape = runtime.get("laser_shape")
+            if persisted_shape in LASER_SHAPES:
+                self._laser_shape = persisted_shape
         except Exception:
             # If the file is corrupt, ignore it and start fresh.
             pass
@@ -108,17 +118,39 @@ class RuntimeControl:
                     self._device_flags[key] = bool(value)
         self._save_state()
 
-    def update_runtime(self, *, master_intensity: float | None, blackout: bool | None) -> None:
+    def update_runtime(
+        self,
+        *,
+        master_intensity: float | None,
+        blackout: bool | None,
+        laser_shape: str | None = None,
+    ) -> None:
         with self._lock:
             if master_intensity is not None:
                 self._master_intensity = self._clamp_scale(master_intensity)
             if blackout is not None:
                 self._blackout = bool(blackout)
+            if laser_shape is not None and laser_shape in LASER_SHAPES:
+                self._laser_shape = laser_shape
         self._save_state()
 
     def is_blackout(self) -> bool:
         with self._lock:
             return self._blackout
+
+    def get_laser_shape(self) -> str:
+        with self._lock:
+            return self._laser_shape
+
+    def set_profile_preset(self, name: str) -> None:
+        """Replace the whole ShowProfile with a named preset.
+
+        Device flags, master intensity, blackout, and laser shape are
+        untouched - only the effect-family toggles/caps/random_seed swap.
+        """
+        with self._lock:
+            self._profile = get_profile(name)
+        self._save_state()
 
     def set_channel_test(self, device: str, channel_offset: int, value: int) -> None:
         """Start (or replace) a manual raw-channel test override.
@@ -198,6 +230,7 @@ class RuntimeControl:
             runtime = {
                 "master_intensity": self._master_intensity,
                 "blackout": self._blackout,
+                "laser_shape": self._laser_shape,
             }
             channel_test = self._channel_test_locked()
 

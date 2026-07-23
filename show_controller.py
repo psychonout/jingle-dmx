@@ -93,11 +93,10 @@ class LightShowController:
         self.laser_novelty_shape = os.getenv(
             "LASER_NOVELTY_SHAPE", "false"
         ).lower() in ("1", "true", "yes")
-        # LASER_SHAPE selects the live-show laser mode.
-        # "circle"  → circle preset locked, max angle speeds, position from music (default)
-        # "novelty" → trace a star outline (same as LASER_NOVELTY_SHAPE=true)
-        # "random"  → original audio-reactive pattern churn
-        self.laser_shape = os.getenv("LASER_SHAPE", "circle")
+        # Laser shape mode ("circle" locked preset vs "random" pattern
+        # churn) is runtime-switchable via the web UI, so it lives on
+        # RuntimeControl (seeded from LASER_SHAPE) instead of here - see
+        # self.runtime_control.get_laser_shape() in _update_laser below.
         # Fixture calibration for circle mode. Many units are mechanically
         # biased upward when v_angle is near 0, so expose a downward bias.
         self.laser_circle_v_angle = int(os.getenv("LASER_CIRCLE_V_ANGLE", "64"))
@@ -411,7 +410,8 @@ class LightShowController:
 
         laser.set_mode("auto")
 
-        if self.laser_shape == "circle":
+        laser_shape = self.runtime_control.get_laser_shape()
+        if laser_shape == "circle":
             # Circle orbit mode: preset is locked, audio only drives position.
             # Nudge mode_level by 2 on beats for a subtle brightness pulse.
             circle_level = 8 + (2 if (is_beat or is_drop) else 0)

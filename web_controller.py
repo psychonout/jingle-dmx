@@ -9,7 +9,8 @@ from fastapi.requests import Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from runtime_control import RuntimeControl
+from config import PROFILE_NAMES
+from runtime_control import LASER_SHAPES, RuntimeControl
 
 
 class ProfileUpdate(BaseModel):
@@ -43,12 +44,17 @@ class DeviceUpdate(BaseModel):
 class RuntimeUpdate(BaseModel):
     master_intensity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     blackout: Optional[bool] = None
+    laser_shape: Optional[str] = None
 
 
 class ChannelTestRequest(BaseModel):
     device: str
     channel_offset: int = Field(..., ge=1)
     value: int = Field(default=255, ge=0, le=255)
+
+
+class PresetRequest(BaseModel):
+    name: str
 
 
 # (start address, channel count) per DMX fixture - must stay in sync with
@@ -150,12 +156,36 @@ def create_app(runtime_control: RuntimeControl) -> FastAPI:
         return runtime_control.state()
 
     @app.put("/api/runtime")
-    def put_runtime(update: RuntimeUpdate) -> dict:
+    def put_runtime(update: RuntimeUpdate) -> JSONResponse:
+        if update.laser_shape is not None and update.laser_shape not in LASER_SHAPES:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"laser_shape must be one of {list(LASER_SHAPES)}"},
+            )
         runtime_control.update_runtime(
             master_intensity=update.master_intensity,
             blackout=update.blackout,
+            laser_shape=update.laser_shape,
         )
-        return runtime_control.state()
+        return JSONResponse(content=runtime_control.state())
+
+    @app.get("/api/profile-presets")
+    def get_profile_presets() -> list[str]:
+        return PROFILE_NAMES
+
+    @app.get("/api/laser-shapes")
+    def get_laser_shapes() -> list[str]:
+        return list(LASER_SHAPES)
+
+    @app.post("/api/apply-preset")
+    def post_apply_preset(req: PresetRequest) -> JSONResponse:
+        if req.name not in PROFILE_NAMES:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"unknown preset '{req.name}', choose from {PROFILE_NAMES}"},
+            )
+        runtime_control.set_profile_preset(req.name)
+        return JSONResponse(content=runtime_control.state())
 
     @app.post("/api/trigger-smoke-burst")
     def post_trigger_smoke_burst() -> dict:
@@ -254,6 +284,10 @@ _PAGE = """
       width: 82px; padding: 5px 7px; border-radius: 8px;
       border: 1px solid #3a5b73; background: #0f1f2c; color: var(--text);
     }
+    select {
+      padding: 5px 7px; border-radius: 8px;
+      border: 1px solid #3a5b73; background: #0f1f2c; color: var(--text);
+    }
     button {
       padding: 8px 12px; border-radius: 8px; border: 1px solid #35566f;
       background: #193347; color: var(--text); cursor: pointer;
@@ -307,6 +341,14 @@ _PAGE = """
           <label><input id="blackout" type="checkbox" /> Blackout</label>
           <button class="danger" onclick="panicBlackout()">Panic Blackout</button>
         </div>
+        <div class="row" style="margin-top:10px;">
+          <label>Show Profile</label>
+          <select id="profilePreset"></select>
+        </div>
+        <div class="row">
+          <label>Laser Shape</label>
+          <select id="laserShape"></select>
+        </div>
       </div>
 
       <div class="card">
@@ -340,6 +382,21 @@ _PAGE = """
   <script>
     const state = { profile: {}, devices: {}, runtime: {}, channel_test: null };
     let deviceChannels = {};
+
+    async function loadSelectOptions() {
+      try {
+        const [presets, shapes] = await Promise.all([
+          call("GET", "/api/profile-presets"),
+          call("GET", "/api/laser-shapes"),
+        ]);
+        const presetSelect = document.getElementById("profilePreset");
+        presetSelect.innerHTML = presets.map((p) => `<option value="${p}">${p}</option>`).join("");
+        const shapeSelect = document.getElementById("laserShape");
+        shapeSelect.innerHTML = shapes.map((s) => `<option value="${s}">${s}</option>`).join("");
+      } catch (err) {
+        // Selects just stay empty; the rest of the page still works.
+      }
+    }
 
     const effectKeys = [
       "enable_beat", "enable_frequency", "enable_combo",
@@ -389,6 +446,8 @@ _PAGE = """
       document.getElementById("masterIntensity").value = state.runtime.master_intensity ?? 1;
       document.getElementById("masterLabel").textContent = (state.runtime.master_intensity ?? 1).toFixed(2);
       document.getElementById("blackout").checked = !!state.runtime.blackout;
+      if (state.profile.name) document.getElementById("profilePreset").value = state.profile.name;
+      if (state.runtime.laser_shape) document.getElementById("laserShape").value = state.runtime.laser_shape;
 
       const effectDiv = document.getElementById("effectToggles");
       effectDiv.innerHTML = "";
@@ -642,8 +701,26 @@ _PAGE = """
         setStatus("update failed", false);
       }
     });
+    document.getElementById("profilePreset").addEventListener("change", async (e) => {
+      try {
+        Object.assign(state, await call("POST", "/api/apply-preset", { name: e.target.value }));
+        render();
+        setStatus(`profile: ${e.target.value}`);
+      } catch (err) {
+        setStatus("preset failed", false);
+      }
+    });
+    document.getElementById("laserShape").addEventListener("change", async (e) => {
+      try {
+        Object.assign(state, await call("PUT", "/api/runtime", { laser_shape: e.target.value }));
+        render();
+        setStatus(`laser shape: ${e.target.value}`);
+      } catch (err) {
+        setStatus("laser shape failed", false);
+      }
+    });
 
-    loadDeviceChannels().then(loadState);
+    loadSelectOptions().then(() => loadDeviceChannels().then(loadState));
     setInterval(loadState, 2000);
     loadTelemetry();
     setInterval(loadTelemetry, 500);

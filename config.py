@@ -51,16 +51,12 @@ class ShowProfile:
     max_smoke_led_level: int = 255
 
 
-def load_default_profile() -> ShowProfile:
-    """Select a default profile based on environment.
+PROFILE_NAMES = ["chill", "bass_party", "ambient_subtle", "club"]
 
-    For now we support a handful of hard-coded profiles and pick them
-    via the SHOW_PROFILE env var. This keeps things very simple but
-    already gives us a repeatable way to run "chill" vs "club" shows.
-    """
-    env_name = os.getenv("SHOW_PROFILE", "club").strip().lower() or "club"
 
-    if env_name == "chill":
+def get_profile(name: str) -> ShowProfile:
+    """Build a named preset ShowProfile, falling back to "club" for unknown names."""
+    if name == "chill":
         return ShowProfile(
             name="chill",
             enable_beat=True,
@@ -80,7 +76,7 @@ def load_default_profile() -> ShowProfile:
             max_smoke_level=90,
             max_smoke_led_level=180,
         )
-    if env_name == "bass_party":
+    if name == "bass_party":
         return ShowProfile(
             name="bass_party",
             enable_beat=True,
@@ -100,7 +96,7 @@ def load_default_profile() -> ShowProfile:
             max_smoke_level=200,
             max_smoke_led_level=220,
         )
-    if env_name == "ambient_subtle":
+    if name == "ambient_subtle":
         return ShowProfile(
             name="ambient_subtle",
             enable_beat=False,
@@ -140,3 +136,14 @@ def load_default_profile() -> ShowProfile:
         max_smoke_level=200,
         max_smoke_led_level=255,
     )
+
+
+def load_default_profile() -> ShowProfile:
+    """Select a default profile based on the SHOW_PROFILE env var.
+
+    Kept as a thin wrapper around get_profile() so startup behaviour is
+    unchanged; runtime switching (e.g. from the web UI) calls get_profile()
+    directly with an explicit name instead of re-reading the environment.
+    """
+    env_name = os.getenv("SHOW_PROFILE", "club").strip().lower() or "club"
+    return get_profile(env_name)
