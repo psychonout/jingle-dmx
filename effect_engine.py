@@ -1420,6 +1420,17 @@ class EffectEngine:
             "cooldown_remaining": max(0.0, self._smoke_cooldown_until - now),
         }
 
+    def force_smoke_burst(self) -> None:
+        """Manually trigger a smoke burst (web UI test button).
+
+        Reuses the same burst duration/cooldown as the automatic
+        phrase/mega-combo trigger in apply_effects, so a manual fire
+        behaves identically to one the show would have picked itself.
+        """
+        now = time.time()
+        self._smoke_burst_until = now + _SMOKE_BURST_SECONDS
+        self._smoke_cooldown_until = now + _SMOKE_MIN_INTERVAL_SECONDS
+
     def apply_effects(
         self,
         frame: AudioFrame,

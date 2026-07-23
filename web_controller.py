@@ -157,6 +157,11 @@ def create_app(runtime_control: RuntimeControl) -> FastAPI:
         )
         return runtime_control.state()
 
+    @app.post("/api/trigger-smoke-burst")
+    def post_trigger_smoke_burst() -> dict:
+        runtime_control.trigger_smoke_burst()
+        return runtime_control.state()
+
     @app.get("/api/telemetry")
     def get_telemetry() -> dict:
         return runtime_control.get_telemetry() or {}
@@ -571,8 +576,21 @@ _PAGE = """
         </div>
         <div class="row"><label>Smoke machine</label>
           <span class="muted">${t.smoke_burst_active ? "bursting now" : `cooldown ${t.smoke_cooldown_remaining.toFixed(0)}s`}</span>
+          <button id="fireSmokeBtn" ${t.smoke_burst_active ? "disabled" : ""}>Fire Smoke Now</button>
         </div>
       `;
+
+      const fireBtn = document.getElementById("fireSmokeBtn");
+      if (fireBtn) {
+        fireBtn.addEventListener("click", async () => {
+          try {
+            await call("POST", "/api/trigger-smoke-burst");
+            setStatus("smoke burst triggered");
+          } catch (err) {
+            setStatus("trigger failed", false);
+          }
+        });
+      }
     }
 
     async function loadTelemetry() {

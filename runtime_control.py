@@ -47,6 +47,9 @@ class RuntimeControl:
         # Live show telemetry, pushed by the show loop every frame - purely
         # a readout for the web UI, never persisted or read back on load.
         self._telemetry: Optional[Dict[str, Any]] = None
+        # One-shot flag: the show loop consumes and clears this on its next
+        # frame, so a request never fires twice.
+        self._smoke_trigger_requested = False
         self._load_state()
 
     def _load_state(self) -> None:
@@ -153,6 +156,17 @@ class RuntimeControl:
     def get_telemetry(self) -> Optional[Dict[str, Any]]:
         with self._lock:
             return dict(self._telemetry) if self._telemetry else None
+
+    def trigger_smoke_burst(self) -> None:
+        with self._lock:
+            self._smoke_trigger_requested = True
+
+    def consume_smoke_trigger(self) -> bool:
+        """Return True at most once per request - clears the flag on read."""
+        with self._lock:
+            requested = self._smoke_trigger_requested
+            self._smoke_trigger_requested = False
+            return requested
 
     def device_flags(self) -> Dict[str, bool]:
         with self._lock:

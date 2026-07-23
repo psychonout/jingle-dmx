@@ -753,6 +753,15 @@ class LightShowController:
                 combo_threshold=combo_threshold,
             )
 
+            # Manual "fire smoke burst now" (web UI). Always consume the
+            # request even if the device is currently disabled, so a click
+            # made while it's off is dropped rather than silently deferred
+            # until the fixture is re-enabled later.
+            if self.runtime_control.consume_smoke_trigger() and device_flags.get(
+                "use_smoke_machine", True
+            ):
+                self.effect_engine.force_smoke_burst()
+
             # Route all effect decisions through the shared engine.
             self.last_effect_type = self.effect_engine.apply_effects(
                 frame=frame,
