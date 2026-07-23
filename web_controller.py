@@ -536,7 +536,7 @@ _PAGE = """
           row.className = "row";
           row.innerHTML = `
             <label>${keyLabel(deviceKey)}</label>
-            <input type="number" min="1" max="${info.count}" value="1" style="width:60px" />
+            <input type="range" min="1" max="${info.count}" value="1" step="1" style="width:140px" />
             <span class="chip"></span>
             <button>Test</button>
           `;
@@ -546,8 +546,7 @@ _PAGE = """
 
           const updateChip = () => {
             const offset = Math.max(1, Math.min(info.count, Number(input.value || 1)));
-            input.value = offset;
-            chip.textContent = `ch ${info.base + offset - 1}`;
+            chip.textContent = `offset ${offset} (ch ${info.base + offset - 1})`;
           };
           input.addEventListener("input", updateChip);
           updateChip();
