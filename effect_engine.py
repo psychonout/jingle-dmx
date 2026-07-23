@@ -1497,7 +1497,7 @@ class EffectEngine:
 
                     if now < self._smoke_burst_until:
                         devices.smoke_machine.set_smoke(
-                            self._cap(220, profile.max_smoke_level)
+                            self._cap(220, self.profile.max_smoke_level)
                         )
                         devices.smoke_machine.set_fan(200)
                     else:
