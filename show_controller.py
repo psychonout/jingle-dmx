@@ -746,6 +746,16 @@ class LightShowController:
             if device_flags.get("use_laser", True):
                 self._update_laser(laser, frame, current_time)
 
+            # Manual channel test (web UI): re-assert the raw value last, so
+            # it overrides whatever the effects above just wrote, for as
+            # long as it stays active. Bypasses device_flags deliberately -
+            # a test should work even for a fixture that's toggled off.
+            active_test = self.runtime_control.get_channel_test()
+            if active_test:
+                test_device = self.devices.get(active_test["device"])
+                if test_device is not None:
+                    test_device._send(active_test["channel_offset"] - 1, active_test["value"])
+
             # Log a human-readable snapshot roughly once per second.
             if int(current_time) != int(self.last_effect_time):
                 msg = (

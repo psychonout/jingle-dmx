@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import asdict, replace
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from config import DeviceConfig, ShowProfile
+
+# How long a manual channel test holds before releasing control back to the
+# show automatically, so a forgotten test tab can't silently freeze a
+# fixture mid-show.
+CHANNEL_TEST_HOLD_SECONDS: float = 20.0
 
 
 class RuntimeControl:
@@ -34,6 +40,10 @@ class RuntimeControl:
         self._profile = replace(show_profile)
         self._master_intensity = 1.0
         self._blackout = False
+        # Manual channel test override - deliberately NOT persisted to disk,
+        # since a stale test from a previous session should never silently
+        # re-apply itself on the next restart.
+        self._channel_test: Optional[Dict[str, Any]] = None
         self._load_state()
 
     def _load_state(self) -> None:
@@ -104,6 +114,35 @@ class RuntimeControl:
         with self._lock:
             return self._blackout
 
+    def set_channel_test(self, device: str, channel_offset: int, value: int) -> None:
+        """Start (or replace) a manual raw-channel test override.
+
+        The show loop re-asserts this value on the given device/channel
+        every frame, after its normal effect output, until it's cleared or
+        expires - see CHANNEL_TEST_HOLD_SECONDS.
+        """
+        with self._lock:
+            self._channel_test = {
+                "device": device,
+                "channel_offset": int(channel_offset),
+                "value": self._clamp_level(value),
+                "expires_at": time.time() + CHANNEL_TEST_HOLD_SECONDS,
+            }
+
+    def clear_channel_test(self) -> None:
+        with self._lock:
+            self._channel_test = None
+
+    def _channel_test_locked(self) -> Optional[Dict[str, Any]]:
+        """Read the active test, clearing it first if expired. Caller must hold self._lock."""
+        if self._channel_test and time.time() >= self._channel_test["expires_at"]:
+            self._channel_test = None
+        return dict(self._channel_test) if self._channel_test else None
+
+    def get_channel_test(self) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            return self._channel_test_locked()
+
     def device_flags(self) -> Dict[str, bool]:
         with self._lock:
             return dict(self._device_flags)
@@ -135,9 +174,11 @@ class RuntimeControl:
                 "master_intensity": self._master_intensity,
                 "blackout": self._blackout,
             }
+            channel_test = self._channel_test_locked()
 
         return {
             "profile": profile,
             "devices": devices,
             "runtime": runtime,
+            "channel_test": channel_test,
         }

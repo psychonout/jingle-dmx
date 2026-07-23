@@ -45,6 +45,25 @@ class RuntimeUpdate(BaseModel):
     blackout: Optional[bool] = None
 
 
+class ChannelTestRequest(BaseModel):
+    device: str
+    channel_offset: int = Field(..., ge=1)
+    value: int = Field(default=255, ge=0, le=255)
+
+
+# (start address, channel count) per DMX fixture - must stay in sync with
+# the dmx_channel/num_channels used in show_controller.py._open_devices.
+# The VU meter isn't listed: it's a Blinkt GPIO LED strip, not a DMX fixture.
+_DEVICE_CHANNELS: dict[str, tuple[int, int]] = {
+    "laser": (1, 10),
+    "strobe": (11, 7),
+    "spotlight": (22, 7),
+    "stinger": (33, 9),
+    "eurolite_strobe": (44, 6),
+    "smoke_machine": (55, 9),
+}
+
+
 def _is_truthy(value: str | None, default: bool) -> bool:
     if value is None:
         return default
@@ -136,6 +155,34 @@ def create_app(runtime_control: RuntimeControl) -> FastAPI:
             master_intensity=update.master_intensity,
             blackout=update.blackout,
         )
+        return runtime_control.state()
+
+    @app.get("/api/device-channels")
+    def get_device_channels() -> dict:
+        return {
+            name: {"base": base, "count": count}
+            for name, (base, count) in _DEVICE_CHANNELS.items()
+        }
+
+    @app.post("/api/test-channel")
+    def post_test_channel(req: ChannelTestRequest) -> JSONResponse:
+        info = _DEVICE_CHANNELS.get(req.device)
+        if info is None:
+            return JSONResponse(
+                status_code=404, content={"detail": f"unknown device '{req.device}'"}
+            )
+        _, count = info
+        if req.channel_offset > count:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"{req.device} only has {count} channels"},
+            )
+        runtime_control.set_channel_test(req.device, req.channel_offset, req.value)
+        return JSONResponse(content=runtime_control.state())
+
+    @app.post("/api/test-channel/clear")
+    def post_clear_test_channel() -> dict:
+        runtime_control.clear_channel_test()
         return runtime_control.state()
 
     @app.get("/", response_class=HTMLResponse)
@@ -251,10 +298,22 @@ _PAGE = """
         <div id="caps"></div>
       </div>
     </div>
+
+    <div class="card">
+      <h2>Channel Test</h2>
+      <div class="muted" style="margin-bottom:8px;">
+        Sends a raw DMX value directly to one channel, bypassing the show
+        loop, so you can confirm a fixture's address/wiring independent of
+        the audio-reactive effects. Auto-releases after 20s if not cleared.
+      </div>
+      <div id="channelTestStatus" class="muted" style="margin-bottom:8px;"></div>
+      <div id="channelTestRows"></div>
+    </div>
   </div>
 
   <script>
-    const state = { profile: {}, devices: {}, runtime: {} };
+    const state = { profile: {}, devices: {}, runtime: {}, channel_test: null };
+    let deviceChannels = {};
 
     const effectKeys = [
       "enable_beat", "enable_frequency", "enable_combo",
@@ -362,6 +421,93 @@ _PAGE = """
           capsDiv.appendChild(row);
         });
       });
+
+      renderChannelTest();
+    }
+
+    function renderChannelTest() {
+      const statusDiv = document.getElementById("channelTestStatus");
+      const test = state.channel_test;
+      if (test) {
+        const info = deviceChannels[test.device];
+        const absCh = info ? info.base + test.channel_offset - 1 : "?";
+        statusDiv.textContent =
+          `Testing ${keyLabel(test.device)}: offset ${test.channel_offset} ` +
+          `(DMX ch ${absCh}) = ${test.value}`;
+      } else {
+        statusDiv.textContent = "No active test.";
+      }
+
+      const rowsDiv = document.getElementById("channelTestRows");
+      rowsDiv.innerHTML = "";
+      deviceOrder
+        .filter((k) => Object.prototype.hasOwnProperty.call(state.devices, k))
+        .forEach((deviceKey) => {
+          const deviceName = deviceKey.replace(/^use_/, "");
+          const info = deviceChannels[deviceName];
+          if (!info) return; // e.g. the VU meter isn't a DMX fixture
+
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `
+            <label>${keyLabel(deviceKey)}</label>
+            <input type="number" min="1" max="${info.count}" value="1" style="width:60px" />
+            <span class="chip"></span>
+            <button>Test</button>
+          `;
+          const input = row.querySelector("input");
+          const chip = row.querySelector(".chip");
+          const button = row.querySelector("button");
+
+          const updateChip = () => {
+            const offset = Math.max(1, Math.min(info.count, Number(input.value || 1)));
+            input.value = offset;
+            chip.textContent = `ch ${info.base + offset - 1}`;
+          };
+          input.addEventListener("input", updateChip);
+          updateChip();
+
+          button.addEventListener("click", async () => {
+            const offset = Math.max(1, Math.min(info.count, Number(input.value || 1)));
+            try {
+              Object.assign(
+                state,
+                await call("POST", "/api/test-channel", {
+                  device: deviceName,
+                  channel_offset: offset,
+                  value: 255,
+                })
+              );
+              render();
+              setStatus(`testing ${deviceName} ch ${offset}`);
+            } catch (err) {
+              setStatus("test failed", false);
+            }
+          });
+          rowsDiv.appendChild(row);
+        });
+
+      const clearRow = document.createElement("div");
+      clearRow.className = "row";
+      clearRow.innerHTML = `<span></span><button class="danger">Clear Test</button>`;
+      clearRow.querySelector("button").addEventListener("click", async () => {
+        try {
+          Object.assign(state, await call("POST", "/api/test-channel/clear"));
+          render();
+          setStatus("test cleared");
+        } catch (err) {
+          setStatus("clear failed", false);
+        }
+      });
+      rowsDiv.appendChild(clearRow);
+    }
+
+    async function loadDeviceChannels() {
+      try {
+        deviceChannels = await call("GET", "/api/device-channels");
+      } catch (err) {
+        // Channel test UI just won't populate rows; the rest of the page still works.
+      }
     }
 
     async function loadState() {
@@ -405,7 +551,7 @@ _PAGE = """
       }
     });
 
-    loadState();
+    loadDeviceChannels().then(loadState);
     setInterval(loadState, 2000);
   </script>
 </body>
