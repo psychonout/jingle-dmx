@@ -205,6 +205,9 @@ class LightShowController:
             smoke_machine = SmokeBubbleMachine(dmx_channel=55)
             smoke_machine.__enter__()
             self.devices["smoke_machine"] = smoke_machine
+            logger.info(
+                f"Smoke/bubble machine active on DMX channel {smoke_machine.dmx_channel}"
+            )
 
         if self.config.use_vu_meter:
             # Allow configuration of the VU color palette via environment variables
